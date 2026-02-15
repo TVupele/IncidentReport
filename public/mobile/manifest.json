@@ -1,0 +1,21 @@
+{
+  "name": "MATASA - Incident Report",
+  "short_name": "MATASA",
+  "description": "Report incidents and receive safety alerts",
+  "start_url": "/mobile/",
+  "display": "standalone",
+  "background_color": "#f5f5f5",
+  "theme_color": "#1a5f2a",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
