@@ -49,7 +49,9 @@ document.addEventListener('DOMContentLoaded', () => {
     document.querySelector('.btn-nav-alerts')?.addEventListener('click', () => showSection('alerts'));
     
     // Load alerts
-    loadAlerts();
+    // Use the more complete index.html for full functionality - this file is deprecated
+    // The main app uses inline script in index.html which has all features
+    // Keeping this for reference only
 });
 
 // Navigation

@@ -14,6 +14,18 @@
     {
       "src": "/health",
       "dest": "src/index.js"
+    },
+    {
+      "src": "/mobile/(.*)",
+      "dest": "/public/mobile/$1"
+    },
+    {
+      "src": "/admin/(.*)",
+      "dest": "/public/admin/$1"
+    },
+    {
+      "src": "/((.*\\.html|.*\\.js|.*\\.css|.*\\.json|.*\\.manifest))",
+      "dest": "/public/$1"
     }
   ]
 }
