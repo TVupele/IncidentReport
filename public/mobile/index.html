@@ -3,16 +3,35 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <meta name="theme-color" content="#1a5f2a">
+  <meta name="theme-color" content="#2E7D32">
   <meta name="description" content="MATASA - Rahota Hatsari da Taimako">
-  <title>MATASA - Rahota</title>
+  <title>MATASA - Incident Report</title>
   
-  <!-- Offline support -->
-  <link rel="manifest" href="manifest.json">
-  <meta name="theme-color" content="#1a5f2a">
+  <link rel="manifest" href="manifest.json"> <!-- Ensure this file exists for PWA -->
   
-  <!-- Styles optimized for low-end devices -->
   <style>
+    /* (Styles are identical to the original; no changes needed) */
+    :root {
+      --primary: #2E7D32;
+      --primary-dark: #1B5E20;
+      --primary-light: #4CAF50;
+      --accent: #FF6F00;
+      --danger: #D32F2F;
+      --warning: #FFA000;
+      --success: #388E3C;
+      --gray-100: #F5F5F5;
+      --gray-200: #EEEEEE;
+      --gray-300: #E0E0E0;
+      --gray-500: #9E9E9E;
+      --gray-700: #616161;
+      --gray-900: #212121;
+      --white: #FFFFFF;
+      --shadow: 0 2px 8px rgba(0,0,0,0.1);
+      --shadow-lg: 0 4px 16px rgba(0,0,0,0.15);
+      --radius: 12px;
+      --radius-lg: 20px;
+    }
+    
     * {
       margin: 0;
       padding: 0;
@@ -20,781 +39,674 @@
     }
     
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: #f5f5f5;
-      color: #333;
-      line-height: 1.4;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: var(--gray-100);
+      color: var(--gray-900);
+      line-height: 1.5;
       font-size: 16px;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+    
+    .header {
+      background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+      color: var(--white);
+      padding: 24px 20px;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+    
+    .header::before {
+      content: '';
+      position: absolute;
+      top: -50%;
+      left: -50%;
+      width: 200%;
+      height: 200%;
+      background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 60%);
+      animation: shimmer 3s ease-in-out infinite;
+    }
+    
+    @keyframes shimmer {
+      0%, 100% { transform: translate(-10%, -10%); }
+      50% { transform: translate(10%, 10%); }
+    }
+    
+    .header h1 {
+      font-size: 1.75rem;
+      font-weight: 700;
+      margin-bottom: 4px;
+      position: relative;
+      z-index: 1;
+    }
+    
+    .header p {
+      font-size: 0.9rem;
+      opacity: 0.9;
+      position: relative;
+      z-index: 1;
+    }
+    
+    .progress-bar {
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+      padding: 16px 20px;
+      background: var(--white);
+    }
+    
+    .progress-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--gray-300);
+      transition: all 0.3s ease;
+    }
+    
+    .progress-dot.active {
+      background: var(--primary);
+      transform: scale(1.3);
+    }
+    
+    .progress-dot.completed {
+      background: var(--success);
     }
     
     .container {
       max-width: 480px;
       margin: 0 auto;
-      padding: 16px;
-    }
-    
-    header {
-      background: #1a5f2a;
-      color: white;
-      padding: 16px;
-      text-align: center;
-    }
-    
-    header h1 {
-      font-size: 1.5rem;
-      margin-bottom: 4px;
-    }
-    
-    header p {
-      font-size: 0.875rem;
-      opacity: 0.9;
-    }
-    
-    .offline-banner {
-      display: none;
-      background: #ff9800;
-      color: white;
-      padding: 8px;
-      text-align: center;
-      font-size: 0.875rem;
-    }
-    
-    .offline-banner.show {
-      display: block;
+      padding: 20px;
     }
     
     .card {
-      background: white;
-      border-radius: 8px;
-      padding: 16px;
+      background: var(--white);
+      border-radius: var(--radius-lg);
+      padding: 24px;
       margin-bottom: 16px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      box-shadow: var(--shadow);
+      animation: slideUp 0.4s ease;
     }
     
-    .form-group {
-      margin-bottom: 16px;
+    @keyframes slideUp {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
     }
     
-    label {
+    .card h2 {
+      font-size: 1.25rem;
+      margin-bottom: 20px;
+      color: var(--gray-900);
+    }
+    
+    .step-title {
+      font-size: 1.1rem;
+      font-weight: 600;
+      margin-bottom: 16px;
+      color: var(--primary);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .step-title .number {
+      width: 28px;
+      height: 28px;
+      background: var(--primary);
+      color: var(--white);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.85rem;
+      font-weight: 700;
+    }
+    
+    .btn {
       display: block;
-      margin-bottom: 6px;
-      font-weight: 500;
-      color: #555;
-    }
-    
-    select, input, textarea {
       width: 100%;
-      padding: 12px;
-      border: 1px solid #ddd;
-      border-radius: 6px;
-      font-size: 16px;
-      background: white;
-    }
-    
-    select:focus, input:focus, textarea:focus {
-      outline: none;
-      border-color: #1a5f2a;
-    }
-    
-    textarea {
-      min-height: 100px;
-      resize: vertical;
-    }
-    
-    button {
-      width: 100%;
-      padding: 14px;
+      padding: 16px 20px;
       border: none;
-      border-radius: 8px;
+      border-radius: var(--radius);
       font-size: 1rem;
       font-weight: 600;
       cursor: pointer;
-      transition: background 0.2s;
+      transition: all 0.2s ease;
+      text-align: center;
+    }
+    
+    .btn:active {
+      transform: scale(0.98);
     }
     
     .btn-primary {
-      background: #1a5f2a;
-      color: white;
+      background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+      color: var(--white);
+      box-shadow: 0 4px 12px rgba(46, 125, 50, 0.3);
     }
     
     .btn-primary:hover {
-      background: #0d4a1c;
+      transform: translateY(-2px);
+      box-shadow: 0 6px 16px rgba(46, 125, 50, 0.4);
     }
     
     .btn-primary:disabled {
-      background: #ccc;
+      background: var(--gray-300);
+      box-shadow: none;
       cursor: not-allowed;
+      transform: none;
     }
     
     .btn-secondary {
-      background: #e8f5e9;
-      color: #1a5f2a;
-      margin-top: 8px;
+      background: var(--gray-100);
+      color: var(--gray-700);
+      margin-top: 12px;
     }
     
-    .btn-danger {
-      background: #d32f2f;
-      color: white;
+    .btn-secondary:hover {
+      background: var(--gray-200);
     }
     
-    .type-grid {
+    .option-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 10px;
+      gap: 12px;
     }
     
-    .type-btn {
-      padding: 12px;
-      background: #e8f5e9;
+    .option-btn {
+      background: var(--gray-100);
       border: 2px solid transparent;
-      border-radius: 8px;
+      border-radius: var(--radius);
+      padding: 20px 12px;
       text-align: center;
       cursor: pointer;
-      transition: all 0.2s;
+      transition: all 0.2s ease;
     }
     
-    .type-btn.selected {
-      border-color: #1a5f2a;
-      background: #c8e6c9;
+    .option-btn:hover {
+      border-color: var(--primary-light);
+      background: #E8F5E9;
     }
     
-    .type-btn .icon {
-      font-size: 1.5rem;
+    .option-btn.selected {
+      border-color: var(--primary);
+      background: #E8F5E9;
+    }
+    
+    .option-btn .icon {
+      font-size: 2rem;
       display: block;
-      margin-bottom: 4px;
-    }
-    
-    .type-btn .label {
-      font-size: 0.875rem;
-      color: #333;
-    }
-    
-    .severity-selector {
-      display: flex;
-      gap: 8px;
-    }
-    
-    .severity-btn {
-      flex: 1;
-      padding: 10px;
-      border: 2px solid #ddd;
-      border-radius: 6px;
-      background: white;
-      cursor: pointer;
-      text-align: center;
-      font-size: 0.875rem;
-    }
-    
-    .severity-btn.selected {
-      border-color: #1a5f2a;
-      background: #c8e6c9;
-    }
-    
-    .severity-btn[data-value="critical"] { border-color: #d32f2f; }
-    .severity-btn[data-value="critical"].selected { background: #ffcdd2; }
-    .severity-btn[data-value="high"] { border-color: #f57c00; }
-    .severity-btn[data-value="high"].selected { background: #ffe0b2; }
-    .severity-btn[data-value="medium"].selected { background: #fff9c4; }
-    .severity-btn[data-value="low"].selected { background: #c8e6c9; }
-    
-    .location-info {
-      font-size: 0.875rem;
-      color: #666;
-      margin-top: 6px;
-    }
-    
-    .location-info.success {
-      color: #1a5f2a;
-    }
-    
-    .location-info.error {
-      color: #d32f2f;
-    }
-    
-    .checkbox-group {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 12px;
-      background: #f5f5f5;
-      border-radius: 6px;
-    }
-    
-    .checkbox-group input {
-      width: 20px;
-      height: 20px;
-    }
-    
-    .upload-btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      padding: 10px 16px;
-      background: #f5f5f5;
-      border: 1px solid #ddd;
-      border-radius: 6px;
-      cursor: pointer;
-      font-size: 0.875rem;
-    }
-    
-    .upload-preview {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 8px;
-      margin-top: 8px;
-    }
-    
-    .upload-preview img {
-      width: 100%;
-      aspect-ratio: 1;
-      object-fit: cover;
-      border-radius: 4px;
-    }
-    
-    .preview-item {
-      position: relative;
-    }
-    
-    .preview-item .remove {
-      position: absolute;
-      top: 4px;
-      right: 4px;
-      width: 20px;
-      height: 20px;
-      background: rgba(0,0,0,0.6);
-      color: white;
-      border: none;
-      border-radius: 50%;
-      font-size: 14px;
-      cursor: pointer;
-    }
-    
-    .success-message {
-      text-align: center;
-      padding: 32px 16px;
-    }
-    
-    .success-message .icon {
-      font-size: 4rem;
-      color: #1a5f2a;
-      margin-bottom: 16px;
-    }
-    
-    .success-message h2 {
-      color: #1a5f2a;
       margin-bottom: 8px;
     }
     
-    .success-message p {
-      color: #666;
+    .option-btn .label {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--gray-700);
+    }
+    
+    .severity-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    
+    .severity-btn {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 16px;
+      background: var(--gray-100);
+      border: 2px solid transparent;
+      border-radius: var(--radius);
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    
+    .severity-btn:hover {
+      border-color: var(--primary-light);
+    }
+    
+    .severity-btn.selected {
+      border-color: var(--primary);
+      background: #E8F5E9;
+    }
+    
+    .severity-btn .dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+    }
+    
+    .severity-btn[data-severity="low"] .dot { background: #4CAF50; }
+    .severity-btn[data-severity="medium"] .dot { background: #FFC107; }
+    .severity-btn[data-severity="high"] .dot { background: #FF9800; }
+    .severity-btn[data-severity="critical"] .dot { background: #F44336; }
+    
+    .severity-btn .label {
+      flex: 1;
+      font-weight: 500;
+    }
+    
+    .form-group {
+      margin-bottom: 20px;
+    }
+    
+    .form-group label {
+      display: block;
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: var(--gray-700);
+    }
+    
+    input, textarea, select {
+      width: 100%;
+      padding: 14px 16px;
+      border: 2px solid var(--gray-300);
+      border-radius: var(--radius);
+      font-size: 1rem;
+      transition: border-color 0.2s ease;
+      background: var(--white);
+    }
+    
+    input:focus, textarea:focus, select:focus {
+      outline: none;
+      border-color: var(--primary);
+    }
+    
+    textarea {
+      min-height: 120px;
+      resize: vertical;
+    }
+    
+    .location-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 16px;
+      background: #E3F2FD;
+      border: 2px dashed #2196F3;
+      border-radius: var(--radius);
+      cursor: pointer;
+      transition: all 0.2s ease;
       margin-bottom: 16px;
     }
     
-    .queue-info {
-      background: #fff3e0;
-      border-radius: 8px;
-      padding: 12px;
-      margin-top: 16px;
-      font-size: 0.875rem;
+    .location-btn:hover {
+      background: #BBDEFB;
     }
     
-    .queue-info .count {
-      font-weight: 600;
-      color: #f57c00;
+    .location-btn.getting-location {
+      background: #FFF3E0;
+      border-color: #FF9800;
+    }
+    
+    .location-btn.success {
+      background: #E8F5E9;
+      border-color: #4CAF50;
+    }
+    
+    .location-btn .icon {
+      font-size: 1.5rem;
+    }
+    
+    .location-status {
+      font-size: 0.85rem;
+      color: var(--gray-700);
+      margin-top: 8px;
+      text-align: center;
+    }
+    
+    .location-status.success {
+      color: var(--success);
+    }
+    
+    .location-status.error {
+      color: var(--danger);
+    }
+    
+    .upload-area {
+      border: 2px dashed var(--gray-300);
+      border-radius: var(--radius);
+      padding: 24px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    
+    .upload-area:hover {
+      border-color: var(--primary);
+      background: #F1F8E9;
+    }
+    
+    .upload-area .icon {
+      font-size: 2.5rem;
+      margin-bottom: 8px;
+    }
+    
+    .upload-area p {
+      color: var(--gray-700);
+    }
+    
+    .photo-preview {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-top: 12px;
+    }
+    
+    .photo-preview .preview-wrapper {
+      position: relative;
+      aspect-ratio: 1;
+    }
+    
+    .photo-preview img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      border-radius: 8px;
+    }
+    
+    .remove-photo {
+      position: absolute;
+      top: 4px;
+      right: 4px;
+      width: 22px;
+      height: 22px;
+      background: rgba(0,0,0,0.6);
+      color: white;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      cursor: pointer;
+      border: none;
+    }
+    
+    .checkbox-wrapper {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 16px;
+      background: var(--gray-100);
+      border-radius: var(--radius);
+      cursor: pointer;
+    }
+    
+    .checkbox-wrapper input {
+      width: 22px;
+      height: 22px;
+      accent-color: var(--primary);
+    }
+    
+    .nav-buttons {
+      display: flex;
+      gap: 12px;
+      margin-top: 20px;
+    }
+    
+    .btn-back {
+      background: var(--gray-200);
+      color: var(--gray-700);
+    }
+    
+    .btn-back:hover {
+      background: var(--gray-300);
+    }
+    
+    .success-screen {
+      text-align: center;
+      padding: 40px 20px;
+    }
+    
+    .success-screen .icon {
+      font-size: 5rem;
+      display: block;
+      margin-bottom: 20px;
+      animation: bounce 0.6s ease;
+    }
+    
+    @keyframes bounce {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.2); }
+    }
+    
+    .success-screen h2 {
+      color: var(--success);
+      margin-bottom: 12px;
+    }
+    
+    .incident-id {
+      display: inline-block;
+      background: var(--gray-100);
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-family: monospace;
+      font-size: 1.1rem;
+      margin: 12px 0;
     }
     
     .hidden {
       display: none !important;
     }
     
-    @media (max-width: 360px) {
-      .type-grid {
-        grid-template-columns: 1fr;
-      }
+    .offline-banner {
+      background: var(--warning);
+      color: var(--gray-900);
+      padding: 10px;
+      text-align: center;
+      font-size: 0.85rem;
+      font-weight: 500;
+    }
+    
+    .spinner {
+      width: 24px;
+      height: 24px;
+      border: 3px solid var(--gray-300);
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      display: inline-block;
+    }
+    
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    
+    .fade-in {
+      animation: fadeIn 0.3s ease;
+    }
+    
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    
+    .error-message {
+      color: var(--danger);
+      font-size: 0.9rem;
+      margin-top: 10px;
+      text-align: center;
     }
   </style>
 </head>
 <body>
-  <div class="offline-banner" id="offlineBanner">
-    ⚠️ Ba tare da intanet ba - Ana adana rahotonku don aika lokaci
+  <div class="offline-banner hidden" id="offlineBanner">
+    ⚠️ Offline - Reports will be saved and sent when connected
   </div>
   
-  <header>
-    <h1>MATASA</h1>
+  <header class="header">
+    <h1>🚨 MATASA</h1>
     <p>Rahota Hatsari da Taimako</p>
   </header>
   
+  <div class="progress-bar" id="progressBar">
+    <div class="progress-dot active" data-step="1"></div>
+    <div class="progress-dot" data-step="2"></div>
+    <div class="progress-dot" data-step="3"></div>
+    <div class="progress-dot" data-step="4"></div>
+    <div class="progress-dot" data-step="5"></div>
+  </div>
+  
   <div class="container">
-    <!-- Report Type Selection -->
-    <div id="step-type" class="card">
-      <h2 style="margin-bottom: 16px;">Me kake so ka yi?</h2>
-      <div class="type-grid">
-        <button class="type-btn" data-type="suspicious_activity">
+    <!-- Step 1: Report Type -->
+    <div class="card" id="step-type">
+      <div class="step-title">
+        <span class="number">1</span>
+        Me kake so ka yi?
+      </div>
+      <div class="option-grid">
+        <button class="option-btn" data-type="suspicious_activity">
           <span class="icon">👁️</span>
           <span class="label">Rahota Abu</span>
         </button>
-        <button class="type-btn" data-type="incident_in_progress">
+        <button class="option-btn" data-type="incident_in_progress">
           <span class="icon">🔥</span>
           <span class="label">Harin Yanzu</span>
         </button>
-        <button class="type-btn" data-type="medical_emergency">
+        <button class="option-btn" data-type="medical_emergency">
           <span class="icon">🚑</span>
           <span class="label">Neman Taimako</span>
         </button>
-        <button class="type-btn" data-type="other">
+        <button class="option-btn" data-type="other">
           <span class="icon">📋</span>
           <span class="label">Wani abu</span>
         </button>
       </div>
     </div>
     
-    <!-- Severity Selection -->
-    <div id="step-severity" class="card hidden">
-      <h2 style="margin-bottom: 16px;">Matakara?</h2>
-      <div class="severity-selector">
-        <button class="severity-btn" data-value="low">Ƙasa</button>
-        <button class="severity-btn" data-value="medium">Matsakaici</button>
-        <button class="severity-btn" data-value="high">Babba</button>
-        <button class="severity-btn" data-value="critical">Cyrori</button>
+    <!-- Step 2: Severity -->
+    <div class="card hidden" id="step-severity">
+      <div class="step-title">
+        <span class="number">2</span>
+        Matakara?
       </div>
+      <div class="severity-grid">
+        <button class="severity-btn" data-severity="low">
+          <span class="dot"></span>
+          <span class="label">Ƙasa (Low)</span>
+        </button>
+        <button class="severity-btn" data-severity="medium">
+          <span class="dot"></span>
+          <span class="label">Matsakaici (Medium)</span>
+        </button>
+        <button class="severity-btn" data-severity="high">
+          <span class="dot"></span>
+          <span class="label">Babba (High)</span>
+        </button>
+        <button class="severity-btn" data-severity="critical">
+          <span class="dot"></span>
+          <span class="label">Cyrori (Critical)</span>
+        </button>
+      </div>
+      <button class="btn btn-secondary" id="backToType">Koma Baya</button>
     </div>
     
-    <!-- Location -->
-    <div id="step-location" class="card hidden">
-      <h2 style="margin-bottom: 16px;">Wuri?</h2>
-      <button class="btn-primary" id="getLocation">
-        📍 Sami Wuri ta Atomatik
-      </button>
-      <p class="location-info" id="locationInfo">Zaka iya zaɓi wuri da hannu idan ba zai yi ba</p>
+    <!-- Step 3: Location -->
+    <div class="card hidden" id="step-location">
+      <div class="step-title">
+        <span class="number">3</span>
+        Wuri?
+      </div>
       
-      <div style="margin-top: 16px;">
+      <div class="location-btn" id="getLocation">
+        <span class="icon">📍</span>
+        <span>Sami Wuri ta Atomatik</span>
+      </div>
+      <div class="location-status" id="locationStatus"></div>
+      
+      <div class="form-group" style="margin-top: 20px;">
         <label>Ko zaɓi wurin kanka:</label>
         <select id="stateSelect">
           <option value="">Zaɓi Jiha</option>
           <option value="Kano">Kano</option>
           <option value="Katsina">Katsina</option>
           <option value="Kaduna">Kaduna</option>
-          <option value=" Bauchi">Bauchi</option>
+          <option value="Bauchi">Bauchi</option>
+          <option value="Jigawa">Jigawa</option>
+          <option value="Sokoto">Sokoto</option>
+          <option value="Zamfara">Zamfara</option>
+          <option value="Kebbi">Kebbi</option>
           <option value="Other">Wani</option>
         </select>
       </div>
+      
+      <button class="btn btn-primary" id="locationNextBtn">Ci gaba</button>
+      <button class="btn btn-secondary" id="backToSeverity">Koma Baya</button>
     </div>
     
-    <!-- Description -->
-    <div id="step-description" class="card hidden">
-      <h2 style="margin-bottom: 16px;">Bayani</h2>
-      <textarea id="description" placeholder="Rubuta bayanin abin da kaga ko abin da faru..."></textarea>
+    <!-- Step 4: Description -->
+    <div class="card hidden" id="step-description">
+      <div class="step-title">
+        <span class="number">4</span>
+        Bayani
+      </div>
       
-      <!-- Photo Upload -->
-      <div style="margin-top: 16px;">
-        <label>Hotuna (zaɓi):</label>
+      <div class="form-group">
+        <label>Rubuta bayanin abin da kaga ko abin da faru:</label>
+        <textarea id="description" placeholder="Fayyada abin da kaga..."></textarea>
+      </div>
+      
+      <div class="form-group">
+        <label>Hotuna (zaɓi, iyaka 3):</label>
         <input type="file" id="photoInput" accept="image/*" capture="environment" multiple hidden>
-        <button class="upload-btn" onclick="document.getElementById('photoInput').click()">
-          📷 Ƙara Hoto
-        </button>
-        <div class="upload-preview" id="photoPreview"></div>
+        <div class="upload-area" onclick="document.getElementById('photoInput').click()">
+          <div class="icon">📷</div>
+          <p>Touch to add photos</p>
+        </div>
+        <div class="photo-preview" id="photoPreview"></div>
       </div>
       
-      <!-- Audio Upload -->
-      <div style="margin-top: 16px;">
-        <label>Muryoyi (zaɓi):</label>
-        <input type="file" id="audioInput" accept="audio/*" capture hidden>
-        <button class="upload-btn" onclick="startAudioRecording()">
-          🎤 Ƙara Murya
-        </button>
-        <div id="audioPreview"></div>
-      </div>
+      <button class="btn btn-primary" id="descriptionNextBtn">Ci gaba</button>
+      <button class="btn btn-secondary" id="backToLocation">Koma Baya</button>
     </div>
     
-    <!-- Callback Consent -->
-    <div id="step-consent" class="card hidden">
-      <h2 style="margin-bottom: 16px;">Tuntuba</h2>
-      <div class="checkbox-group">
+    <!-- Step 5: Callback & Submit -->
+    <div class="card hidden" id="step-consent">
+      <div class="step-title">
+        <span class="number">5</span>
+        Tuntuba
+      </div>
+      
+      <div class="checkbox-wrapper" id="callbackCheckbox">
         <input type="checkbox" id="callbackConsent">
         <label for="callbackConsent">Ina so su Kira ni idan kuna buƙatar ƙarin bayani</label>
       </div>
       
-      <input type="tel" id="phoneNumber" placeholder="Lambar tarho (+234...)" style="margin-top: 16px;">
+      <div class="form-group hidden" id="phoneGroup">
+        <label>Lambar tarho:</label>
+        <input type="tel" id="phoneNumber" placeholder="+2348012345678">
+      </div>
+      
+      <div class="error-message hidden" id="submitError"></div>
+      
+      <div class="nav-buttons">
+        <button class="btn btn-back" id="backToDescription">Koma Baya</button>
+        <button class="btn btn-primary" id="submitBtn">Aika Rahoto</button>
+      </div>
     </div>
     
-    <!-- Submit -->
-    <div id="step-submit" class="card hidden">
-      <button class="btn-primary" id="submitBtn">Aika Rahoto</button>
-      <button class="btn-secondary" id="backBtn">Koma Baya</button>
-    </div>
-    
-    <!-- Success -->
-    <div id="step-success" class="card hidden">
-      <div class="success-message">
-        <div class="icon">✅</div>
+    <!-- Success Screen -->
+    <div class="card hidden" id="step-success">
+      <div class="success-screen">
+        <span class="icon">✅</span>
         <h2>An Karɓi Rahotonku!</h2>
-        <p>ID: <span id="incidentId"></span></p>
-        <p id="statusMessage">Za mu yi amfani da shi don taimakawa al'umma.</p>
+        <p>ID:</p>
+        <div class="incident-id" id="incidentId">---</div>
+        <p>Za mu yi amfani da shi don taimakawa al'umma.</p>
+        <button class="btn btn-primary" style="margin-top: 24px;" onclick="resetForm()">Rahota Wani</button>
       </div>
-      <div class="queue-info" id="queueInfo" style="display: none;">
-        <strong>📤 Rahotanni da aka adana:</strong>
-        <span class="count" id="queueCount">0</span> ana jiran aika
-      </div>
-      <button class="btn-primary" style="margin-top: 16px;" onclick="resetForm()">
-        Rahota Wani
-      </button>
     </div>
   </div>
   
-  <script>
-    // Service Worker for offline support
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('sw.js').catch(err => {
-        console.log('SW registration failed:', err);
-      });
-    }
-    
-    // State
-    let formData = {
-      incidentType: '',
-      severity: '',
-      latitude: null,
-      longitude: null,
-      accuracy: null,
-      state: '',
-      description: '',
-      photos: [],
-      audio: null,
-      callbackConsent: false,
-      phoneNumber: '',
-    };
-    
-    // Current step
-    let currentStep = 'type';
-    
-    // Offline queue
-    let offlineQueue = JSON.parse(localStorage.getItem('offlineQueue') || '[]');
-    
-    // DOM elements
-    const steps = {
-      type: document.getElementById('step-type'),
-      severity: document.getElementById('step-severity'),
-      location: document.getElementById('step-location'),
-      description: document.getElementById('step-description'),
-      consent: document.getElementById('step-consent'),
-      submit: document.getElementById('step-submit'),
-      success: document.getElementById('step-success'),
-    };
-    
-    // Initialize
-    document.addEventListener('DOMContentLoaded', () => {
-      updateOfflineBanner();
-      updateQueueCount();
-      setupEventListeners();
-    });
-    
-    function setupEventListeners() {
-      // Type selection
-      document.querySelectorAll('.type-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-          formData.incidentType = btn.dataset.type;
-          showStep('severity');
-        });
-      });
-      
-      // Severity selection
-      document.querySelectorAll('.severity-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-          formData.severity = btn.dataset.value;
-          showStep('location');
-        });
-      });
-      
-      // Location
-      document.getElementById('getLocation').addEventListener('click', getLocation);
-      document.getElementById('stateSelect').addEventListener('change', (e) => {
-        formData.state = e.target.value;
-      });
-      
-      // Photo upload
-      document.getElementById('photoInput').addEventListener('change', handlePhotoUpload);
-      
-      // Consent
-      document.getElementById('callbackConsent').addEventListener('change', (e) => {
-        formData.callbackConsent = e.target.checked;
-        document.getElementById('phoneNumber').style.display = e.target.checked ? 'block' : 'none';
-      });
-      document.getElementById('phoneNumber').addEventListener('input', (e) => {
-        formData.phoneNumber = e.target.value;
-      });
-      
-      // Submit
-      document.getElementById('submitBtn').addEventListener('click', submitForm);
-      document.getElementById('backBtn').addEventListener('click', goBack);
-    }
-    
-    function showStep(step) {
-      // Hide all steps
-      Object.values(steps).forEach(el => el.classList.add('hidden'));
-      // Show current step
-      steps[step].classList.remove('hidden');
-      currentStep = step;
-    }
-    
-    function goBack() {
-      const stepOrder = ['type', 'severity', 'location', 'description', 'consent', 'submit'];
-      const currentIndex = stepOrder.indexOf(currentStep);
-      if (currentIndex > 0) {
-        showStep(stepOrder[currentIndex - 1]);
-      }
-    }
-    
-    function getLocation() {
-      const info = document.getElementById('locationInfo');
-      info.textContent = 'Ana neman wuri...';
-      info.className = 'location-info';
-      
-      if (!navigator.geolocation) {
-        info.textContent = 'Ba za a iya samu da atomatik ba. Zaɓi wurin kanka.';
-        info.className = 'location-info error';
-        return;
-      }
-      
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          formData.latitude = position.coords.latitude;
-          formData.longitude = position.coords.longitude;
-          formData.accuracy = position.coords.accuracy;
-          
-          info.textContent = `Wuri an samo: ${Math.round(position.coords.accuracy)}m daidaito`;
-          info.className = 'location-info success';
-        },
-        (error) => {
-          info.textContent = 'Ba za a iya samu da atomatik ba. Zaɓi wurin kanka.';
-          info.className = 'location-info error';
-        },
-        { enableHighAccuracy: true, timeout: 10000 }
-      );
-    }
-    
-    function handlePhotoUpload(e) {
-      const files = Array.from(e.target.files);
-      const preview = document.getElementById('photoPreview');
-      
-      files.forEach(file => {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          formData.photos.push(e.target.result);
-          const div = document.createElement('div');
-          div.className = 'preview-item';
-          div.innerHTML = `
-            <img src="${e.target.result}">
-            <button class="remove" onclick="removePhoto(${formData.photos.length - 1})">×</button>
-          `;
-          preview.appendChild(div);
-        };
-        reader.readAsDataURL(file);
-      });
-    }
-    
-    function removePhoto(index) {
-      formData.photos.splice(index, 1);
-      renderPhotoPreview();
-    }
-    
-    function renderPhotoPreview() {
-      const preview = document.getElementById('photoPreview');
-      preview.innerHTML = formData.photos.map((photo, i) => `
-        <div class="preview-item">
-          <img src="${photo}">
-          <button class="remove" onclick="removePhoto(${i})">×</button>
-        </div>
-      `).join('');
-    }
-    
-    let mediaRecorder;
-    let audioChunks = [];
-    
-    async function startAudioRecording() {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        mediaRecorder = new MediaRecorder(stream);
-        audioChunks = [];
-        
-        mediaRecorder.ondataavailable = (e) => {
-          audioChunks.push(e.data);
-        };
-        
-        mediaRecorder.onstop = () => {
-          const blob = new Blob(audioChunks, { type: 'audio/webm' });
-          const reader = new FileReader();
-          reader.onload = () => {
-            formData.audio = reader.result;
-            document.getElementById('audioPreview').innerHTML = `
-              <audio controls src="${reader.result}" style="width: 100%; margin-top: 8px;"></audio>
-            `;
-          };
-          reader.readAsDataURL(blob);
-        };
-        
-        mediaRecorder.start();
-        
-        // Record for up to 30 seconds
-        setTimeout(() => {
-          if (mediaRecorder.state === 'recording') {
-            mediaRecorder.stop();
-          }
-        }, 30000);
-        
-        alert('Ana muɗa... yi magana sai ka danna OK');
-      } catch (err) {
-        console.error('Audio recording failed:', err);
-        alert('Ba za a iya ɗaukar murya ba');
-      }
-    }
-    
-    async function submitForm() {
-      formData.description = document.getElementById('description').value;
-      
-      const submitBtn = document.getElementById('submitBtn');
-      submitBtn.disabled = true;
-      submitBtn.textContent = 'Ana aika...';
-      
-      const report = {
-        id: Date.now().toString(36),
-        timestamp: Date.now(),
-        ...formData,
-      };
-      
-      if (navigator.onLine) {
-        try {
-          const response = await fetch('/api/v1/incidents', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              channel: 'mobile',
-              incidentType: formData.incidentType,
-              severity: formData.severity,
-              latitude: formData.latitude,
-              longitude: formData.longitude,
-              accuracy: formData.accuracy,
-              state: formData.state,
-              description: formData.description,
-              photoUrls: formData.photos,
-              audioUrl: formData.audio,
-              callbackConsent: formData.callbackConsent,
-              phoneNumber: formData.phoneNumber,
-            }),
-          });
-          
-          if (!response.ok) throw new Error('Submission failed');
-          
-          const data = await response.json();
-          document.getElementById('incidentId').textContent = data.incidentId;
-          showStep('success');
-        } catch (err) {
-          console.error('Submission error:', err);
-          // Queue for later
-          queueReport(report);
-        }
-      } else {
-        queueReport(report);
-        document.getElementById('incidentId').textContent = report.id;
-        document.getElementById('statusMessage').textContent = 'An adana rahotonku. Za aika lokacin da ka sami intanet.';
-        showStep('success');
-      }
-      
-      submitBtn.disabled = false;
-      submitBtn.textContent = 'Aika Rahoto';
-    }
-    
-    function queueReport(report) {
-      offlineQueue.push(report);
-      localStorage.setItem('offlineQueue', JSON.stringify(offlineQueue));
-      updateQueueCount();
-    }
-    
-    function updateQueueCount() {
-      const count = document.getElementById('queueCount');
-      const info = document.getElementById('queueInfo');
-      if (offlineQueue.length > 0) {
-        count.textContent = offlineQueue.length;
-        info.style.display = 'block';
-      } else {
-        info.style.display = 'none';
-      }
-    }
-    
-    // Try to sync when online
-    window.addEventListener('online', () => {
-      updateOfflineBanner();
-      syncQueue();
-    });
-    
-    window.addEventListener('offline', () => {
-      updateOfflineBanner();
-    });
-    
-    function updateOfflineBanner() {
-      const banner = document.getElementById('offlineBanner');
-      banner.classList.toggle('show', !navigator.onLine);
-    }
-    
-    async function syncQueue() {
-      if (offlineQueue.length === 0) return;
-      
-      const queue = [...offlineQueue];
-      offlineQueue = [];
-      localStorage.setItem('offlineQueue', '[]');
-      
-      for (const report of queue) {
-        try {
-          await fetch('/api/v1/incidents', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              channel: 'mobile',
-              incidentType: report.incidentType,
-              severity: report.severity,
-              latitude: report.latitude,
-              longitude: report.longitude,
-              state: report.state,
-              description: report.description,
-              callbackConsent: report.callbackConsent,
-              phoneNumber: report.phoneNumber,
-            }),
-          });
-        } catch (err) {
-          // Requeue failed reports
-          offlineQueue.push(report);
-          localStorage.setItem('offlineQueue', JSON.stringify(offlineQueue));
-        }
-      }
-      
-      updateQueueCount();
-    }
-    
-    function resetForm() {
-      formData = {
-        incidentType: '',
-        severity: '',
-        latitude: null,
-        longitude: null,
-        accuracy: null,
-        state: '',
-        description: '',
-        photos: [],
-        audio: null,
-        callbackConsent: false,
-        phoneNumber: '',
-      };
-      
-      document.getElementById('description').value = '';
-      document.getElementById('callbackConsent').checked = false;
-      document.getElementById('phoneNumber').value = '';
-      document.getElementById('phoneNumber').style.display = 'none';
-      document.getElementById('photoPreview').innerHTML = '';
-      document.getElementById('audioPreview').innerHTML = '';
-      document.getElementById('locationInfo').textContent = 'Zaka iya zaɓi wuri da hannu idan ba zai yi ba';
-      document.getElementById('locationInfo').className = 'location-info';
-      
-      showStep('type');
-    }
-  </script>
+ <script src="mobile.js"></script>
 </body>
 </html>

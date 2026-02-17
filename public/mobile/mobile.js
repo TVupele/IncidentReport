@@ -1,215 +1,428 @@
-// Mobile Page JavaScript
-let reportData = {
-    incidentType: null,
-    severity: null,
-    location: null,
-    description: null,
-    callbackConsent: false
+// mobile.js – Enhanced Incident Reporting for MATASA
+
+// ===== STATE MANAGEMENT =====
+const state = {
+    currentStep: 1,
+    incidentType: '',
+    severity: '',
+    latitude: null,
+    longitude: null,
+    accuracy: null,
+    state: '',
+    description: '',
+    photos: [],           // File objects for submission
+    photoPreviews: [],    // base64 strings for preview (optional)
+    callbackConsent: false,
+    phoneNumber: '',
+    isSubmitting: false
 };
 
-// Initialize on page load
+// Offline queue – each entry contains report data + photos as base64
+let offlineQueue = JSON.parse(localStorage.getItem('offlineQueue') || '[]');
+
+// DOM element shortcuts
+const offlineBanner = document.getElementById('offlineBanner');
+const submitBtn = document.getElementById('submitBtn');
+const submitError = document.getElementById('submitError');
+const photoInput = document.getElementById('photoInput');
+const photoPreview = document.getElementById('photoPreview');
+
+// ===== INIT =====
 document.addEventListener('DOMContentLoaded', () => {
-    // Setup incident type buttons
-    document.querySelectorAll('.btn-incident-type').forEach(btn => {
-        btn.addEventListener('click', () => {
-            selectIncidentType(btn.getAttribute('data-type'));
-        });
-    });
-    
-    // Setup severity buttons
-    document.querySelectorAll('.btn-severity').forEach(btn => {
-        btn.addEventListener('click', () => {
-            selectSeverity(btn.getAttribute('data-severity'));
-        });
-    });
-    
-    // Setup back buttons
-    document.querySelectorAll('.btn-back').forEach(btn => {
-        btn.addEventListener('click', () => {
-            goToStep(parseInt(btn.getAttribute('data-step')));
-        });
-    });
-    
-    // Setup next step button
-    document.querySelector('.btn-next-step')?.addEventListener('click', () => {
-        goToStep(4);
-    });
-    
-    // Setup location button
-    document.querySelector('.btn-get-location')?.addEventListener('click', getLocation);
-    
-    // Setup submit button
-    document.querySelector('.btn-submit')?.addEventListener('click', submitReport);
-    
-    // Setup reset button
-    document.querySelector('.btn-reset-form')?.addEventListener('click', resetForm);
-    
-    // Setup navigation
-    document.querySelector('.btn-nav-report')?.addEventListener('click', () => showSection('report'));
-    document.querySelector('.btn-nav-alerts')?.addEventListener('click', () => showSection('alerts'));
-    
-    // Load alerts
-    // Use the more complete index.html for full functionality - this file is deprecated
-    // The main app uses inline script in index.html which has all features
-    // Keeping this for reference only
+    setupEventListeners();
+    updateOfflineBanner();
+    updateProgressBar();
+    restoreSelectedUI();
 });
 
-// Navigation
-function showSection(section) {
-    if (section === 'report') {
-        document.getElementById('report-form').style.display = 'block';
-        document.getElementById('alerts-list').parentElement.style.display = 'block';
-    } else if (section === 'alerts') {
-        document.getElementById('report-form').style.display = 'none';
-        document.getElementById('alerts-list').parentElement.style.display = 'none';
-    }
-}
-
-// Incident type selection
-function selectIncidentType(type) {
-    reportData.incidentType = type;
-    goToStep(2);
-}
-
-// Severity selection
-function selectSeverity(severity) {
-    reportData.severity = severity;
-    goToStep(3);
-}
-
-// Step navigation
-function goToStep(step) {
-    // Hide all steps
-    document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
-    document.querySelectorAll('.dot').forEach(d => d.classList.remove('active'));
-    
-    // Show target step
-    document.getElementById(`step-${step}`).classList.add('active');
-    document.getElementById(`dot-${step}`).classList.add('active');
-}
-
-// Get GPS location
-function getLocation() {
-    const status = document.getElementById('location-status');
-    status.textContent = '🔄 Neman wata...';
-    
-    if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-            (position) => {
-                reportData.location = {
-                    latitude: position.coords.latitude,
-                    longitude: position.coords.longitude,
-                    accuracy: position.coords.accuracy
-                };
-                status.innerHTML = `✅ An same ni:<br>Lat: ${position.coords.latitude.toFixed(4)}<br>Lng: ${position.coords.longitude.toFixed(4)}`;
-            },
-            (error) => {
-                status.textContent = '❌ Ba a same wata ba. Zabi handaki.';
-                document.getElementById('manual-location').style.display = 'block';
-            },
-            { timeout: 10000 }
-        );
-    } else {
-        status.textContent = '❌ Wata ba aiki ba. Zabi handaki.';
-        document.getElementById('manual-location').style.display = 'block';
-    }
-}
-
-// Submit report
-async function submitReport() {
-    // Collect form data
-    reportData.description = document.getElementById('description').value;
-    reportData.callbackConsent = document.getElementById('callback-consent').checked;
-    
-    // Collect manual location if GPS not available
-    if (!reportData.location) {
-        reportData.location = {
-            state: document.getElementById('state-select').value,
-            lga: document.getElementById('lga-input').value,
-            village: document.getElementById('village-input').value
-        };
-    }
-    
-    try {
-        const response = await fetch('/api/v1/incidents', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                ...reportData,
-                channel: 'mobile'
-            })
+// ===== EVENT LISTENERS =====
+function setupEventListeners() {
+    // Incident type buttons
+    document.querySelectorAll('.option-btn[data-type]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const type = e.currentTarget.dataset.type;
+            setSelectedType(type);
+            state.incidentType = type;
+            goToStep(2);
         });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-            document.getElementById('incident-id').textContent = `ID: ${data.incidentId}`;
-            document.getElementById('report-form').style.display = 'none';
-            document.getElementById('success-message').style.display = 'block';
+    });
+
+    // Severity buttons
+    document.querySelectorAll('.severity-btn[data-severity]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const severity = e.currentTarget.dataset.severity;
+            setSelectedSeverity(severity);
+            state.severity = severity;
+            goToStep(3);
+        });
+    });
+
+    // Back buttons
+    document.getElementById('backToType').addEventListener('click', () => goToStep(1));
+    document.getElementById('backToSeverity').addEventListener('click', () => goToStep(2));
+    document.getElementById('backToLocation').addEventListener('click', () => goToStep(3));
+    document.getElementById('backToDescription').addEventListener('click', () => goToStep(4));
+
+    // Next buttons
+    document.getElementById('locationNextBtn').addEventListener('click', () => {
+        if ((state.latitude && state.longitude) || state.state) {
+            goToStep(4);
         } else {
-            alert('Kuskure: ' + data.message);
+            const status = document.getElementById('locationStatus');
+            status.textContent = 'Don Allah sami wuri ko zaɓi jiha.';
+            status.className = 'location-status error';
+        }
+    });
+
+    document.getElementById('descriptionNextBtn').addEventListener('click', () => {
+        goToStep(5);
+    });
+
+    // Location
+    document.getElementById('getLocation').addEventListener('click', getLocation);
+    document.getElementById('stateSelect').addEventListener('change', (e) => {
+        state.state = e.target.value;
+    });
+
+    // Photo upload
+    photoInput.addEventListener('change', handlePhotoUpload);
+
+    // Callback consent
+    document.getElementById('callbackConsent').addEventListener('change', (e) => {
+        state.callbackConsent = e.target.checked;
+        document.getElementById('phoneGroup').classList.toggle('hidden', !e.target.checked);
+        if (!e.target.checked) {
+            state.phoneNumber = '';
+            document.getElementById('phoneNumber').value = '';
+        }
+    });
+
+    document.getElementById('phoneNumber').addEventListener('input', (e) => {
+        state.phoneNumber = e.target.value;
+    });
+
+    document.getElementById('description').addEventListener('input', (e) => {
+        state.description = e.target.value;
+    });
+
+    // Submit
+    submitBtn.addEventListener('click', submitReport);
+
+    // Online / Offline
+    window.addEventListener('online', () => {
+        updateOfflineBanner();
+        syncOfflineQueue();
+    });
+    window.addEventListener('offline', updateOfflineBanner);
+}
+
+// ===== UI HELPERS =====
+function setSelectedType(type) {
+    document.querySelectorAll('.option-btn').forEach(btn => {
+        btn.classList.toggle('selected', btn.dataset.type === type);
+    });
+}
+
+function setSelectedSeverity(severity) {
+    document.querySelectorAll('.severity-btn').forEach(btn => {
+        btn.classList.toggle('selected', btn.dataset.severity === severity);
+    });
+}
+
+function restoreSelectedUI() {
+    if (state.incidentType) setSelectedType(state.incidentType);
+    if (state.severity) setSelectedSeverity(state.severity);
+}
+
+// ===== NAVIGATION =====
+function goToStep(step) {
+    // Hide all step cards
+    document.querySelectorAll('.card').forEach(card => {
+        card.classList.add('hidden');
+    });
+
+    // Show target step
+    const stepIds = ['type', 'severity', 'location', 'description', 'consent', 'success'];
+    const target = document.getElementById(`step-${stepIds[step - 1]}`);
+    if (target) {
+        target.classList.remove('hidden');
+        target.classList.add('fade-in');
+        setTimeout(() => target.classList.remove('fade-in'), 300);
+    }
+
+    state.currentStep = step;
+    updateProgressBar();
+    restoreSelectedUI();
+}
+
+function updateProgressBar() {
+    const dots = document.querySelectorAll('.progress-dot');
+    dots.forEach((dot, idx) => {
+        const step = idx + 1;
+        dot.classList.remove('active', 'completed');
+        if (step === state.currentStep) dot.classList.add('active');
+        else if (step < state.currentStep) dot.classList.add('completed');
+    });
+}
+
+// ===== LOCATION =====
+function getLocation() {
+    const btn = document.getElementById('getLocation');
+    const status = document.getElementById('locationStatus');
+
+    if (!navigator.geolocation) {
+        status.textContent = 'Geolocation ba aiki ba';
+        status.className = 'location-status error';
+        return;
+    }
+
+    btn.classList.add('getting-location');
+    btn.innerHTML = '<span class="spinner"></span> Neman wuri...';
+    status.textContent = '';
+    status.className = 'location-status';
+
+    navigator.geolocation.getCurrentPosition(
+        (position) => {
+            state.latitude = position.coords.latitude;
+            state.longitude = position.coords.longitude;
+            state.accuracy = position.coords.accuracy;
+
+            btn.classList.remove('getting-location');
+            btn.classList.add('success');
+            btn.innerHTML = '<span class="icon">✅</span><span>An same wuri</span>';
+            status.textContent = `Lat: ${state.latitude.toFixed(4)}, Lng: ${state.longitude.toFixed(4)}`;
+            status.className = 'location-status success';
+        },
+        (error) => {
+            btn.classList.remove('getting-location');
+            btn.innerHTML = '<span class="icon">📍</span><span>Sami Wuri ta Atomatik</span>';
+            status.textContent = 'Ba a same wuri ba. Zaɓi handaki.';
+            status.className = 'location-status error';
+        },
+        { timeout: 10000, enableHighAccuracy: true }
+    );
+}
+
+// ===== PHOTO UPLOAD =====
+function handlePhotoUpload(e) {
+    const files = Array.from(e.target.files);
+    const maxPhotos = 3;
+
+    if (state.photos.length + files.length > maxPhotos) {
+        alert(`Za ka iya ɗaukar hotuna ${maxPhotos} kawai.`);
+        e.target.value = '';
+        return;
+    }
+
+    files.forEach(file => {
+        if (!file.type.startsWith('image/')) return;
+
+        // Store File object
+        state.photos.push(file);
+
+        // Create preview
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+            const wrapper = document.createElement('div');
+            wrapper.className = 'preview-wrapper';
+
+            const img = document.createElement('img');
+            img.src = ev.target.result;
+
+            const removeBtn = document.createElement('span');
+            removeBtn.className = 'remove-photo';
+            removeBtn.innerHTML = '✖';
+            removeBtn.onclick = () => removePhoto(file, wrapper);
+
+            wrapper.appendChild(img);
+            wrapper.appendChild(removeBtn);
+            photoPreview.appendChild(wrapper);
+
+            // Store base64 for offline fallback
+            state.photoPreviews.push(ev.target.result);
+        };
+        reader.readAsDataURL(file);
+    });
+
+    e.target.value = '';
+}
+
+function removePhoto(file, wrapper) {
+    const idx = state.photos.indexOf(file);
+    if (idx !== -1) {
+        state.photos.splice(idx, 1);
+        state.photoPreviews.splice(idx, 1);
+    }
+    wrapper.remove();
+}
+
+// ===== VALIDATION =====
+function validateStep5() {
+    if (!state.incidentType) return 'Don Allah zaɓi nau\'in rahoto.';
+    if (!state.severity) return 'Don Allah zaɓi matakin hatsari.';
+    if (!state.latitude && !state.longitude && !state.state) {
+        return 'Don Allah sami wuri ko zaɓi jiha.';
+    }
+    if (state.callbackConsent) {
+        const phone = state.phoneNumber.trim();
+        if (!phone) return 'Don Allah shigar da lambar tarho idan kana son a kira ka.';
+        const phoneRegex = /^(\+234|0)[0-9]{10}$/;
+        if (!phoneRegex.test(phone.replace(/\s/g, ''))) {
+            return 'Lambar tarho ba daidai ba. Misali: +2348012345678 ko 08012345678';
+        }
+    }
+    return null;
+}
+
+// ===== SUBMIT =====
+async function submitReport() {
+    if (state.isSubmitting) return;
+
+    const errorMsg = validateStep5();
+    if (errorMsg) {
+        submitError.textContent = errorMsg;
+        submitError.classList.remove('hidden');
+        return;
+    }
+    submitError.classList.add('hidden');
+
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<span class="spinner"></span> Ana aika...';
+    state.isSubmitting = true;
+
+    // Build FormData
+    const formData = new FormData();
+    formData.append('channel', 'mobile');
+    formData.append('incidentType', state.incidentType);
+    formData.append('severity', state.severity);
+    formData.append('latitude', state.latitude || '');
+    formData.append('longitude', state.longitude || '');
+    formData.append('accuracy', state.accuracy || '');
+    formData.append('state', state.state || '');
+    formData.append('description', state.description || '');
+    formData.append('callbackConsent', state.callbackConsent);
+    formData.append('phoneNumber', state.phoneNumber || '');
+    state.photos.forEach((photo, i) => formData.append(`photo_${i}`, photo));
+
+    try {
+        const response = await fetch('/api/v1/incidents', { method: 'POST', body: formData });
+        const data = await response.json();
+        if (data.success) {
+            document.getElementById('incidentId').textContent = data.incidentId || 'INC-' + Date.now();
+            goToStep(6);
+        } else {
+            throw new Error(data.message || 'Submission failed');
         }
     } catch (error) {
-        console.error('Submission error:', error);
-        // Queue for offline
-        queueOfflineReport(reportData);
-        alert('Ba a iya aika ba. An ajiye don lokacin da aka samu. ID: OFFLINE-' + Date.now());
-        document.getElementById('incident-id').textContent = `ID: OFFLINE-${Date.now()}`;
-        document.getElementById('report-form').style.display = 'none';
-        document.getElementById('success-message').style.display = 'block';
+        console.error('Submit error:', error);
+        // Queue offline with base64 photos
+        queueReport({
+            channel: 'mobile',
+            incidentType: state.incidentType,
+            severity: state.severity,
+            latitude: state.latitude,
+            longitude: state.longitude,
+            accuracy: state.accuracy,
+            state: state.state,
+            description: state.description,
+            callbackConsent: state.callbackConsent,
+            phoneNumber: state.phoneNumber,
+            photos: state.photoPreviews // base64 array
+        });
+        document.getElementById('incidentId').textContent = 'OFFLINE-' + Date.now();
+        goToStep(6);
+    } finally {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = 'Aika Rahoto';
+        state.isSubmitting = false;
     }
 }
 
-// Reset form
+// ===== OFFLINE QUEUE =====
+function queueReport(report) {
+    offlineQueue.push({ ...report, timestamp: Date.now() });
+    localStorage.setItem('offlineQueue', JSON.stringify(offlineQueue));
+}
+
+async function syncOfflineQueue() {
+    if (offlineQueue.length === 0) return;
+
+    const queue = [...offlineQueue];
+    offlineQueue = [];
+    localStorage.setItem('offlineQueue', '[]');
+
+    for (const report of queue) {
+        try {
+            const formData = new FormData();
+            Object.keys(report).forEach(key => {
+                if (key !== 'photos') formData.append(key, report[key]);
+            });
+            if (report.photos && Array.isArray(report.photos)) {
+                report.photos.forEach((base64, i) => {
+                    const blob = dataURLtoBlob(base64);
+                    formData.append(`photo_${i}`, blob, `photo_${i}.jpg`);
+                });
+            }
+            const res = await fetch('/api/v1/incidents', { method: 'POST', body: formData });
+            if (!res.ok) throw new Error('Sync failed');
+        } catch (err) {
+            offlineQueue.push(report); // re-queue
+            localStorage.setItem('offlineQueue', JSON.stringify(offlineQueue));
+        }
+    }
+}
+
+function dataURLtoBlob(dataURL) {
+    const [header, base64] = dataURL.split(',');
+    const mime = header.match(/:(.*?);/)[1];
+    const binary = atob(base64);
+    const array = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) array[i] = binary.charCodeAt(i);
+    return new Blob([array], { type: mime });
+}
+
+function updateOfflineBanner() {
+    if (offlineBanner) offlineBanner.classList.toggle('hidden', navigator.onLine);
+}
+
+// ===== RESET =====
 function resetForm() {
-    reportData = {
-        incidentType: null,
-        severity: null,
-        location: null,
-        description: null,
-        callbackConsent: false
-    };
+    // Reset state
+    state.currentStep = 1;
+    state.incidentType = '';
+    state.severity = '';
+    state.latitude = null;
+    state.longitude = null;
+    state.accuracy = null;
+    state.state = '';
+    state.description = '';
+    state.photos = [];
+    state.photoPreviews = [];
+    state.callbackConsent = false;
+    state.phoneNumber = '';
+
+    // Reset UI
     document.getElementById('description').value = '';
-    document.getElementById('location-status').textContent = '';
-    document.getElementById('manual-location').style.display = 'none';
-    document.getElementById('report-form').style.display = 'block';
-    document.getElementById('success-message').style.display = 'none';
+    document.getElementById('phoneNumber').value = '';
+    document.getElementById('callbackConsent').checked = false;
+    document.getElementById('phoneGroup').classList.add('hidden');
+    photoPreview.innerHTML = '';
+    document.getElementById('stateSelect').value = '';
+    submitError.classList.add('hidden');
+
+    // Reset location button
+    const locBtn = document.getElementById('getLocation');
+    locBtn.classList.remove('success', 'getting-location');
+    locBtn.innerHTML = '<span class="icon">📍</span><span>Sami Wuri ta Atomatik</span>';
+    document.getElementById('locationStatus').textContent = '';
+
+    // Remove selections
+    document.querySelectorAll('.option-btn, .severity-btn').forEach(btn => btn.classList.remove('selected'));
+
     goToStep(1);
 }
 
-// Offline support
-function queueOfflineReport(data) {
-    const queue = JSON.parse(localStorage.getItem('offline_reports') || '[]');
-    queue.push({
-        ...data,
-        timestamp: Date.now()
-    });
-    localStorage.setItem('offline_reports', JSON.stringify(queue));
-}
-
-// Load alerts
-async function loadAlerts() {
-    try {
-        const response = await fetch('/api/v1/alerts/active');
-        const data = await response.json();
-        
-        if (data.success && data.alerts && data.alerts.length > 0) {
-            const alerts = data.alerts.slice(0, 5);
-            document.getElementById('alerts-list').innerHTML = alerts.map(a => `
-                <div style="padding: 10px; border-bottom: 1px solid #eee;">
-                    <strong>${a.title || a.type}</strong>
-                    <p style="font-size: 0.85rem; color: #636e72; margin-top: 5px;">
-                        ${a.content?.hausa || a.content?.english || ''}
-                    </p>
-                </div>
-            `).join('');
-        } else {
-            document.getElementById('alerts-list').innerHTML = '<p style="color: #636e72;">Babba alerta a yanzu.</p>';
-        }
-    } catch (error) {
-        console.error('Failed to load alerts:', error);
-        document.getElementById('alerts-list').innerHTML = '<p style="color: #636e72;">Ba a iya loading alerts ba.</p>';
-    }
+// ===== OPTIONAL: SERVICE WORKER =====
+if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js').catch(err => console.log('SW registration failed:', err));
 }

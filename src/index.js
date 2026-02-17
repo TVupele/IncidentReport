@@ -45,6 +45,11 @@ if (config.env !== 'test') {
 // Static file serving
 app.use(express.static('public'));
 
+// Redirect root to mobile app
+app.get('/', (req, res) => {
+  res.redirect('/mobile/index.html');
+});
+
 // Rate limiting for API routes
 const apiLimiter = rateLimit({
   windowMs: config.rateLimit.windowMs,

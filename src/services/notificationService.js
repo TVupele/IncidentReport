@@ -12,9 +12,15 @@ class NotificationService {
     }
     
     // Initialize Twilio client if credentials are available (fallback)
-    if (config.twilio.accountSid && config.twilio.authToken) {
+    // Must have valid accountSid (starts with AC) and authToken
+    if (config.twilio.accountSid && 
+        config.twilio.accountSid.startsWith('AC') && 
+        config.twilio.authToken && 
+        config.twilio.authToken !== 'your_auth_token') {
       const twilio = require('twilio');
       this.twilioClient = twilio(config.twilio.accountSid, config.twilio.authToken);
+    } else {
+      console.log('Twilio not configured - using Africa\'s Talking only');
     }
     
     // Message queue for offline support
