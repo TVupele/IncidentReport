@@ -1,17 +1,31 @@
 require('dotenv').config();
 
+// Validate required database environment variables
+const requiredDbVars = ['DB_HOST', 'DB_USERNAME', 'DB_PASSWORD', 'DB_NAME'];
+const missingVars = requiredDbVars.filter(varName => !process.env[varName]);
+if (missingVars.length > 0) {
+  throw new Error(`Missing required environment variables: ${missingVars.join(', ')}`);
+}
+
 module.exports = {
-  env: process.env.NODE_ENV || 'development',
+  env: process.env.NODE_ENV || 'production',
+  host: process.env.HOST || 'localhost',
   port: parseInt(process.env.PORT, 10) || 3000,
   apiVersion: process.env.API_VERSION || 'v1',
   
   database: {
-    host: process.env.DB_HOST || 'localhost',
+    host: process.env.DB_HOST,
     port: parseInt(process.env.DB_PORT, 10) || 5432,
-    username: process.env.DB_USERNAME || 'postgres',
-    password: process.env.DB_PASSWORD || 'postgres',
-    name: process.env.DB_NAME || 'incident_response',
+    username: process.env.DB_USERNAME,
+    password: process.env.DB_PASSWORD,
+    name: process.env.DB_NAME,
     dialect: 'postgres',
+    dialectOptions: process.env.DB_SSL === 'true' ? {
+      ssl: {
+        require: true,
+        rejectUnauthorized: false, // Supabase uses self-signed certificates
+      },
+    } : {},
     pool: {
       max: 10,
       min: 0,
@@ -88,7 +102,7 @@ module.exports = {
       requestHelp: 'Help needed:\n1. Police\n2. Fire service\n3. Ambulance\n4. Community focal',
       alert: 'New alert received\n{alert}',
       thankYou: 'Thank you! Your report submitted. ID: {incidentId}',
-      timeout: 'Session timed out. To restart, dial *123#',
+      timeout: 'Session timed out. To restart, dial *384*88811#',
       invalid: 'Invalid input. Try again.',
     }
   }
