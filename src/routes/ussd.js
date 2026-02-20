@@ -44,11 +44,11 @@ const providerResponseFormatters = {
     type: 'text',
     body: `${isEnd ? 'END' : 'CON'} ${message}`,
   }),
-  hub2: (message, isEnd) => ({
+  hub2: (message, isEnd, sessionId) => ({
     type: 'json',
     body: {
       ussd_response: {
-        SESSIONID: sessionId, // sessionId must be in scope – see usage below
+        SESSIONID: sessionId,
         MENU: message,
         ACTION: isEnd ? 0 : 1,
       },
@@ -113,15 +113,7 @@ router.post('/', async (req, res) => {
  */
 function sendProviderResponse(res, provider, sessionId, message, isEnd) {
   const formatter = providerResponseFormatters[provider] || providerResponseFormatters.default;
-  let response;
-  if (provider === 'hub2') {
-    // Hub2 formatter needs sessionId
-    response = formatter(message, isEnd);
-    // Inject sessionId manually (simplified)
-    response.body.ussd_response.SESSIONID = sessionId;
-  } else {
-    response = formatter(message, isEnd);
-  }
+  const response = formatter(message, isEnd, sessionId);
 
   if (response.type === 'text') {
     res.set('Content-Type', 'text/plain; charset=utf-8').send(response.body);

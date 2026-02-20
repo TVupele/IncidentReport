@@ -2,7 +2,7 @@ const { v4: uuidv4 } = require('uuid');
 const { Op } = require('sequelize');
 const config = require('../config');
 const { UssdSession, Incident, Alert } = require('../models');
-const sequelize = require('../config/database'); // assuming sequelize instance is exported
+const { sequelize } = require('../models/database'); // assuming sequelize instance is exported
 
 // Simple in‑memory cache for alerts (use Redis in production)
 const alertCache = {

@@ -1,4 +1,4 @@
-const { DataTypes } = require('sequelize');
+const { DataTypes, Op } = require('sequelize');
 
 module.exports = (sequelize) => {
   const UssdSession = sequelize.define('UssdSession', {
@@ -134,8 +134,8 @@ module.exports = (sequelize) => {
     const cutoff = new Date(Date.now() - hoursOld * 60 * 60 * 1000);
     return this.destroy({
       where: {
-        lastActivityAt: { [require('sequelize').Op.lt]: cutoff },
-        state: { [require('sequelize').Op.notIn]: ['completed', 'timeout'] },
+        lastActivityAt: { [Op.lt]: cutoff },
+        state: { [Op.notIn]: ['completed', 'timeout'] },
       },
     });
   };
