@@ -6,51 +6,75 @@ const cors = require('cors');
 const compression = require('compression');
 const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
+const winston = require('winston');
 
 const config = require('./config');
 const { rateLimiterService } = require('./services');
-const { initializeDatabase, sequelize } = require('./models/database');
-const { initModels } = require('./models');
+const { sequelize, initModels, syncDatabase } = require('./models');
 
-// Import routes
-const incidentRoutes = require('./routes/incidents');
-const ussdRoutes = require('./routes/ussd');
-const adminRoutes = require('./routes/admin');
+// Configure Winston logger
+const logger = winston.createLogger({
+  level: config.env === 'production' ? 'info' : 'debug',
+  format: winston.format.combine(
+    winston.format.timestamp(),
+    winston.format.json()
+  ),
+  transports: [
+    new winston.transports.Console({
+      format: winston.format.combine(
+        winston.format.colorize(),
+        winston.format.simple()
+      ),
+    }),
+    // Add file transport in production
+    ...(config.env === 'production'
+      ? [new winston.transports.File({ filename: 'logs/error.log', level: 'error' })]
+      : []),
+  ],
+});
 
 const app = express();
 
-// Trust proxy (for rate limiting behind reverse proxy)
+// Trust proxy (for rate limiting behind load balancer)
 app.set('trust proxy', 1);
 
 // Security middleware
-app.use(helmet());
-app.use(cors({
-  origin: process.env.ALLOWED_ORIGINS?.split(',') || '*',
+app.use(helmet({
+  contentSecurityPolicy: false, // Set to true and configure if needed
+}));
+
+// CORS – allow specific origins or default to * in development only
+const corsOptions = {
+  origin: config.env === 'production'
+    ? (process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : [])
+    : '*',
   methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Device-Info'],
-}));
+};
+app.use(cors(corsOptions));
 
 // Compression
 app.use(compression());
 
-// Body parsing
+// Body parsing with size limits
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Request logging
-if (config.env !== 'test') {
-  app.use(morgan('combined'));
-}
+// Request logging with Morgan + Winston
+const morganStream = {
+  write: (message) => logger.info(message.trim()),
+};
+app.use(morgan('combined', { stream: morganStream, skip: (req, res) => config.env === 'test' }));
 
-// Static file serving
-app.use(express.static('public'));
+// Static files with caching
+app.use(express.static('public', { maxAge: '1d' }));
 
 // Redirect root to mobile app
 app.get('/', (req, res) => {
   res.redirect('/mobile/index.html');
 });
 
-// Rate limiting for API routes
+// Global rate limiter for API routes
 const apiLimiter = rateLimit({
   windowMs: config.rateLimit.windowMs,
   max: config.rateLimit.maxRequests,
@@ -61,24 +85,31 @@ const apiLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
 });
-
 app.use('/api/v1', apiLimiter);
 
 // Routes
-app.use('/api/v1/incidents', incidentRoutes);
-app.use('/api/v1/ussd', ussdRoutes);
-app.use('/api/v1/admin', adminRoutes);
+app.use('/api/v1/incidents', require('./routes/incidents'));
+app.use('/api/v1/ussd', require('./routes/ussd'));
+app.use('/api/v1/admin', require('./routes/admin'));
 
-// Health check
+// Health check with simple caching
+let dbStatus = 'unknown';
+let lastCheck = 0;
+const healthCheckCacheMs = 5000; // 5 seconds
+
 app.get('/health', async (req, res) => {
-  let dbStatus = 'unknown';
-  try {
-    await sequelize.authenticate();
-    dbStatus = 'connected';
-  } catch (error) {
-    dbStatus = 'disconnected';
+  const now = Date.now();
+  if (now - lastCheck > healthCheckCacheMs) {
+    try {
+      await sequelize.authenticate();
+      dbStatus = 'connected';
+    } catch (error) {
+      dbStatus = 'disconnected';
+      logger.error('Health check DB error', { error: error.message });
+    }
+    lastCheck = now;
   }
-  
+
   res.json({
     status: 'healthy',
     timestamp: new Date().toISOString(),
@@ -122,102 +153,118 @@ app.use((req, res) => {
   });
 });
 
-// Error handler
+// Global error handler
 app.use((err, req, res, next) => {
-  console.error('Unhandled error:', err);
-  
-  res.status(err.status || 500).json({
-    error: err.name || 'Internal Server Error',
-    message: config.env === 'production' ? 'An error occurred' : err.message,
+  logger.error('Unhandled error', { error: err.message, stack: err.stack });
+
+  const status = err.status || 500;
+  const message = config.env === 'production' && status === 500
+    ? 'Internal Server Error'
+    : err.message;
+
+  res.status(status).json({
+    error: err.name || 'InternalServerError',
+    message,
   });
 });
 
-// Initialize services and start server
+// Initialisation and server start
 async function start() {
   let dbConnected = false;
-  
-  // Check if we should skip database for development
   const skipDb = process.env.SKIP_DATABASE === 'true';
-  
-  if (skipDb) {
-    console.log('⚠️  SKIP_DATABASE=true, running without database (limited functionality)');
-    dbConnected = false;
-  } else {
+
+  // Database connection (unless skipped)
+  if (!skipDb) {
     try {
-      // Initialize database connection and sync models
-      console.log('Connecting to PostgreSQL...');
-      await initializeDatabase();
-      
-      // Initialize models
-      const models = initModels(sequelize);
-      global.models = models; // Make models available globally
-      
-      console.log('PostgreSQL connected and models synchronized');
+      logger.info('Connecting to PostgreSQL...');
+
+      // Define models first
+      initModels(sequelize);
+
+      // Authenticate and sync (use { force: false } in production)
+      await sequelize.authenticate();
+      logger.info('PostgreSQL connected');
+
+      if (config.env !== 'production') {
+        // In dev/test, sync (alter may be safer than force)
+        await syncDatabase({ alter: true });
+        logger.info('Database synced');
+      }
+
       dbConnected = true;
-      
     } catch (error) {
-      console.error('Database connection failed:', error.message);
-      
-      if (process.env.NODE_ENV !== 'production') {
-        console.log('⚠️  Running in development mode without database');
-        console.log('⚠️  Some features will not work without a database');
-        dbConnected = false;
-      } else {
-        console.error('========================================');
-        console.error('Could not connect to PostgreSQL database.');
-        console.error('To run without database, set SKIP_DATABASE=true');
-        console.error('========================================');
+      logger.error('Database connection failed', { error: error.message });
+
+      if (config.env === 'production') {
+        logger.error('Exiting due to database failure in production');
         process.exit(1);
+      } else {
+        logger.warn('Running in development without database (limited functionality)');
       }
     }
+  } else {
+    logger.warn('SKIP_DATABASE=true – running without database (limited functionality)');
   }
-  
+
+  // Initialise rate limiter (may attempt Redis, fallback to in-memory)
   try {
-    // Initialize rate limiter (works without Redis)
     await rateLimiterService.init();
-    
-    // Start server
-    const server = app.listen(config.port, () => {
-      console.log(`Server running on port ${config.port}`);
-      console.log(`Environment: ${config.env}`);
-      console.log(`USSD Short Code: ${config.ussd.shortCode}`);
-      console.log(`API Documentation: http://localhost:${config.port}/api/v1`);
-      console.log(`Database: ${dbConnected ? 'Connected (PostgreSQL)' : 'Not connected (limited functionality)'}`);
-    });
-    
-    // Graceful shutdown
-    process.on('SIGTERM', () => gracefulShutdown(server, dbConnected));
-    process.on('SIGINT', () => gracefulShutdown(server, dbConnected));
-    
+    logger.info('Rate limiter initialised');
   } catch (error) {
-    console.error('Failed to start server:', error);
-    process.exit(1);
+    logger.warn('Rate limiter init failed, using in-memory fallback', { error: error.message });
   }
+
+  // Start HTTP server
+  const server = app.listen(config.port, () => {
+    logger.info(`Server running on port ${config.port}`);
+    logger.info(`Environment: ${config.env}`);
+    logger.info(`USSD Short Code: ${config.ussd.shortCode}`);
+    logger.info(`API Documentation: http://localhost:${config.port}/api/v1`);
+    logger.info(`Database: ${dbConnected ? 'Connected' : 'Not connected'}`);
+  });
+
+  // Graceful shutdown
+  const shutdown = async (signal) => {
+    logger.info(`${signal} received, shutting down gracefully...`);
+
+    server.close(async () => {
+      logger.info('HTTP server closed');
+
+      if (dbConnected) {
+        try {
+          await sequelize.close();
+          logger.info('PostgreSQL connection closed');
+        } catch (error) {
+          logger.error('Error closing PostgreSQL', { error: error.message });
+        }
+      }
+
+      // Close other connections (e.g., Redis)
+      process.exit(0);
+    });
+
+    // Force shutdown after timeout
+    setTimeout(() => {
+      logger.error('Forced shutdown due to timeout');
+      process.exit(1);
+    }, 30000);
+  };
+
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
 }
 
-function gracefulShutdown(server, dbConnected = false) {
-  console.log('Graceful shutdown initiated...');
-  
-  server.close(async () => {
-    console.log('HTTP server closed');
-    
-    if (dbConnected) {
-      try {
-        await sequelize.close();
-        console.log('PostgreSQL connection closed');
-      } catch (error) {
-        console.error('Error closing PostgreSQL:', error);
-      }
-    }
-    process.exit(0);
-  });
-  
-  // Force shutdown after 30 seconds
-  setTimeout(() => {
-    console.error('Forced shutdown due to timeout');
-    process.exit(1);
-  }, 30000);
-}
+// Handle uncaught exceptions and rejections
+process.on('uncaughtException', (err) => {
+  logger.error('Uncaught Exception', { error: err.message, stack: err.stack });
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  logger.error('Unhandled Rejection', { reason, promise });
+  // Optionally exit in production
+  if (config.env === 'production') process.exit(1);
+});
 
 // Start the application
 start();

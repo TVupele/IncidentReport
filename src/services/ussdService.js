@@ -2,12 +2,21 @@ const { v4: uuidv4 } = require('uuid');
 const { Op } = require('sequelize');
 const config = require('../config');
 const { UssdSession, Incident, Alert } = require('../models');
+const sequelize = require('../config/database'); // assuming sequelize instance is exported
+
+// Simple in‑memory cache for alerts (use Redis in production)
+const alertCache = {
+  data: null,
+  timestamp: 0,
+  ttl: 30000, // 30 seconds
+};
 
 class UssdGateway {
   constructor() {
     this.menus = config.ussdMenus;
     this.sessionTimeout = config.ussd.sessionTimeoutMs;
     this.provider = config.ussd.provider || 'africastalking';
+    this.maxMessageLength = config.ussd.maxMessageLength || 182; // Configurable
   }
 
   /**
@@ -16,9 +25,8 @@ class UssdGateway {
   async handleRequest(params) {
     const { sessionId, phoneNumber, input, serviceCode, operator, provider } = params;
 
-    // Check or create session
+    // Find or create session
     let session = await UssdSession.findOne({ where: { sessionId } });
-
     if (!session) {
       session = await this.createSession(sessionId, phoneNumber);
     }
@@ -32,8 +40,11 @@ class UssdGateway {
     // Process input
     const response = await this.processInput(session, input);
 
-    // Update session
-    await this.updateSession(session, input, response);
+    // Update session only if changed
+    if (session.changed()) {
+      session.lastActivityAt = new Date();
+      await session.save();
+    }
 
     return response;
   }
@@ -42,71 +53,65 @@ class UssdGateway {
    * Create new USSD session
    */
   async createSession(sessionId, phoneNumber) {
-    const session = await UssdSession.create({
+    return UssdSession.create({
       sessionId,
       phoneNumber,
-      language: 'hausa', // Default to Hausa
+      language: 'hausa', // Default; could be derived from phone number prefix
       state: 'main_menu',
       currentStep: 0,
       startedAt: new Date(),
       lastActivityAt: new Date(),
     });
-    return session;
+  }
+
+  /**
+   * Map state names to handler methods
+   */
+  getHandler(state) {
+    const handlers = {
+      'main_menu': this.handleMainMenu,
+      'incident_category': this.handleIncidentCategory,
+      'severity_selection': this.handleSeveritySelection,
+      'location_selection': this.handleLocationSelection,
+      'description': this.handleDescription,
+      'callback_consent': this.handleCallbackConsent,
+      'confirmation': this.handleConfirmation,
+      'completed': this.handleMainMenu, // Restart on completed session
+    };
+    return handlers[state] || this.handleInvalidState;
   }
 
   /**
    * Process user input based on current state
    */
   async processInput(session, input) {
-    const normalizedInput = input ? input.trim() : '';
+    const normalizedInput = (input || '').trim();
 
-    switch (session.state) {
-      case 'idle':
-        return this.handleMainMenu(session, normalizedInput);
-
-      case 'main_menu':
-        return this.handleMainMenu(session, normalizedInput);
-
-      case 'incident_type_selection':
-        return this.handleIncidentTypeSelection(session, normalizedInput);
-
-      case 'incident_category':
-        return this.handleIncidentCategory(session, normalizedInput);
-
-      case 'severity_selection':
-        return this.handleSeveritySelection(session, normalizedInput);
-
-      case 'location_selection':
-        return this.handleLocationSelection(session, normalizedInput);
-
-      case 'description':
-        return this.handleDescription(session, normalizedInput);
-
-      case 'callback_consent':
-        return this.handleCallbackConsent(session, normalizedInput);
-
-      case 'confirmation':
-        return this.handleConfirmation(session, normalizedInput);
-
-      case 'completed':
-        // Session completed, restart
-        return this.handleMainMenu(session, '');
-
-      default:
-        return this.getMenuResponse(session, 'invalid');
+    // Basic input validation: length limit (typical USSD max 160)
+    if (normalizedInput.length > 160) {
+      return this.getMenuResponse(session, 'invalid');
     }
+
+    const handler = this.getHandler(session.state);
+    return handler.call(this, session, normalizedInput);
+  }
+
+  /**
+   * Fallback handler for unknown state
+   */
+  async handleInvalidState(session, input) {
+    session.state = 'main_menu';
+    return this.getMenuResponse(session, 'welcome');
   }
 
   /**
    * Handle main menu selection
    */
   async handleMainMenu(session, input) {
-    const menu = session.language === 'hausa' ? this.menus.hausa : this.menus.english;
+    const menu = this.getLocalizedMenu(session.language);
 
-    if (!input || input === '') {
-      session.state = 'main_menu';
-      session.currentStep = 1;
-      return this.getMenuResponse(session, 'welcome');
+    if (input === '') {
+      return this.continueResponse(menu.welcome);
     }
 
     const choice = parseInt(input, 10);
@@ -115,24 +120,24 @@ class UssdGateway {
       case 1: // Report suspicious activity
         session.state = 'incident_category';
         session.dataIncidentType = 'suspicious_activity';
-        return this.getMenuResponse(session, 'suspiciousActivity');
+        return this.continueResponse(menu.suspiciousActivity);
 
       case 2: // Report incident in progress
         session.state = 'incident_category';
         session.dataIncidentType = 'incident_in_progress';
-        return this.getMenuResponse(session, 'incidentInProgress');
+        return this.continueResponse(menu.incidentInProgress);
 
       case 3: // Request help
         session.state = 'incident_category';
         session.dataIncidentType = 'request_help';
-        return this.getMenuResponse(session, 'requestHelp');
+        return this.continueResponse(menu.requestHelp);
 
-      case 4: // Read alerts (check for active alerts)
-        const alertText = await this.getLatestAlerts(session);
-        return this.endWithAlert(session, alertText);
+      case 4: // Read alerts
+        const alertText = await this.getLatestAlerts(session.language);
+        return this.endResponse(alertText);
 
       case 5: // Repeat menu
-        return this.getMenuResponse(session, 'welcome');
+        return this.continueResponse(menu.welcome);
 
       default:
         return this.getMenuResponse(session, 'invalid');
@@ -142,16 +147,10 @@ class UssdGateway {
   /**
    * Handle incident category selection
    */
-  async handleIncidentTypeSelection(session, input) {
-    // Handle menu directly without intermediate step
-    return this.handleIncidentCategory(session, input);
-  }
-
-  /**
-   * Handle incident category selection
-   */
   async handleIncidentCategory(session, input) {
     const choice = parseInt(input, 10);
+    const menu = this.getLocalizedMenu(session.language);
+
     const typeMap = {
       1: 'fight',
       2: 'gunshot',
@@ -183,7 +182,7 @@ class UssdGateway {
     }
 
     session.state = 'severity_selection';
-    return this.getSeverityPrompt(session);
+    return this.continueResponse(this.getLocalizedPrompt(session.language, 'severity'));
   }
 
   /**
@@ -201,12 +200,11 @@ class UssdGateway {
     if (choice >= 1 && choice <= 4) {
       session.dataSeverity = severityMap[choice];
     } else {
-      // Default to medium if invalid
-      session.dataSeverity = 'medium';
+      session.dataSeverity = 'medium'; // default
     }
 
     session.state = 'location_selection';
-    return this.getLocationPrompt(session);
+    return this.continueResponse(this.getLocalizedPrompt(session.language, 'location'));
   }
 
   /**
@@ -215,14 +213,11 @@ class UssdGateway {
   async handleLocationSelection(session, input) {
     const choice = parseInt(input, 10);
 
-    if (choice === 1) {
-      // Use cell tower location (automatic)
+    if (choice === 1 || choice === 2) {
+      // In a real app, you'd handle auto vs manual differently
+      // For now, just proceed to description
       session.state = 'description';
-      return this.getDescriptionPrompt(session);
-    } else if (choice === 2) {
-      // Manual village selection - show state/LGA list
-      session.state = 'description';
-      return this.getDescriptionPrompt(session);
+      return this.continueResponse(this.getLocalizedPrompt(session.language, 'description'));
     } else {
       return this.getMenuResponse(session, 'invalid');
     }
@@ -234,7 +229,7 @@ class UssdGateway {
   async handleDescription(session, input) {
     session.dataDescription = input || '';
     session.state = 'callback_consent';
-    return this.getCallbackPrompt(session);
+    return this.continueResponse(this.getLocalizedPrompt(session.language, 'callback'));
   }
 
   /**
@@ -242,10 +237,14 @@ class UssdGateway {
    */
   async handleCallbackConsent(session, input) {
     const choice = parseInt(input, 10);
-
     session.dataCallbackConsent = (choice === 1);
     session.state = 'confirmation';
-    return this.getConfirmationPrompt(session);
+
+    // Build summary dynamically to avoid hardcoding
+    const summary = this.buildIncidentSummary(session);
+    const confirmPrompt = this.getLocalizedPrompt(session.language, 'confirmation')
+      .replace('{summary}', summary);
+    return this.continueResponse(confirmPrompt);
   }
 
   /**
@@ -255,19 +254,25 @@ class UssdGateway {
     const choice = parseInt(input, 10);
 
     if (choice === 1) {
-      // Submit the report
+      // Submit the report inside a transaction
+      const transaction = await sequelize.transaction();
       try {
-        const incident = await this.createIncident(session);
+        const incident = await this.createIncident(session, transaction);
         session.incidentCreated = true;
         session.incidentId = incident.incidentId;
         session.state = 'completed';
-        await session.save();
+        await session.save({ transaction });
 
-        const menu = session.language === 'hausa' ? this.menus.hausa : this.menus.english;
-        const responseText = menu.thankYou.replace('{incidentId}', incident.incidentId);
-        return this.endResponse(responseText);
+        await transaction.commit();
+
+        const menu = this.getLocalizedMenu(session.language);
+        const thankYou = menu.thankYou.replace('{incidentId}', incident.incidentId);
+        return this.endResponse(thankYou);
       } catch (error) {
+        await transaction.rollback();
         console.error('Error creating incident:', error);
+        // Return a generic error and restart
+        session.state = 'main_menu';
         return this.getMenuResponse(session, 'invalid');
       }
     } else if (choice === 2) {
@@ -280,9 +285,19 @@ class UssdGateway {
   }
 
   /**
-   * Create incident from session data
+   * Build a summary of the incident for confirmation
    */
-  async createIncident(session) {
+  buildIncidentSummary(session) {
+    const type = session.dataIncidentType || 'unknown';
+    const severity = session.dataSeverity || 'medium';
+    const desc = (session.dataDescription || '').substring(0, 50); // truncate long descriptions
+    return `Type: ${type}\nSeverity: ${severity}\nDesc: ${desc}`;
+  }
+
+  /**
+   * Create incident from session data (within a transaction)
+   */
+  async createIncident(session, transaction) {
     const incident = await Incident.create({
       channel: 'ussd',
       reporterPhoneNumber: session.phoneNumber,
@@ -301,114 +316,59 @@ class UssdGateway {
       status: 'received',
       metadataReceivedVia: this.provider,
       metadataReportTimestamp: new Date(),
-    });
+    }, { transaction });
 
-    // Trigger escalation engine
+    // Trigger escalation engine – if this fails, the transaction will rollback
     const escalationService = require('./escalationService');
-    await escalationService.processIncident(incident);
+    await escalationService.processIncident(incident, { transaction });
 
     return incident;
   }
 
   /**
-   * Get menu response
+   * Get menu for the specified language
+   */
+  getLocalizedMenu(lang) {
+    return lang === 'hausa' ? this.menus.hausa : this.menus.english;
+  }
+
+  /**
+   * Get a specific prompt from the configuration
+   */
+  getLocalizedPrompt(lang, promptKey) {
+    const menu = this.getLocalizedMenu(lang);
+    // Fallback to English if key missing
+    return menu[promptKey] || (lang === 'hausa' ? this.menus.english[promptKey] : '');
+  }
+
+  /**
+   * Get menu response (continue/end) based on menu key
    */
   getMenuResponse(session, menuKey) {
-    const menu = session.language === 'hausa' ? this.menus.hausa : this.menus.english;
-    let response = menu[menuKey] || menu.invalid;
+    const message = this.getLocalizedPrompt(session.language, menuKey);
+    // For 'timeout' and 'thankYou' we want to end the session
+    if (menuKey === 'timeout' || menuKey === 'thankYou') {
+      return this.endResponse(message);
+    }
+    // For others, continue
+    return this.continueResponse(message);
+  }
 
-    // Update session state
-    if (menuKey !== 'invalid') {
-      session.state = this.getStateFromMenu(menuKey);
+  /**
+   * Get latest alerts (cached)
+   */
+  async getLatestAlerts(lang) {
+    const now = Date.now();
+    if (alertCache.data && (now - alertCache.timestamp) < alertCache.ttl) {
+      return alertCache.data;
     }
 
-    return this.continueResponse(response);
-  }
-
-  /**
-   * Get state from menu key
-   */
-  getStateFromMenu(menuKey) {
-    const stateMap = {
-      welcome: 'main_menu',
-      suspiciousActivity: 'incident_category',
-      incidentInProgress: 'incident_category',
-      requestHelp: 'incident_category',
-    };
-    return stateMap[menuKey] || 'main_menu';
-  }
-
-  /**
-   * Get severity prompt
-   */
-  getSeverityPrompt(session) {
-    const severityText = session.language === 'hausa'
-      ? 'Matakara?: 1. Ƙasa 2. Matsakaici 3. Babba 4. Cyrori'
-      : 'Severity?: 1. Low 2. Medium 3. High 4. Critical';
-    return this.continueResponse(severityText);
-  }
-
-  /**
-   * Get location prompt
-   */
-  getLocationPrompt(session) {
-    const prompt = session.language === 'hausa'
-      ? 'Wuri:\n1. Amfani da wata mashin\n2. Zaba wuri da hannu'
-      : 'Location:\n1. Auto (cell tower)\n2. Manual select';
-    return this.continueResponse(prompt);
-  }
-
-  /**
-   * Get description prompt
-   */
-  getDescriptionPrompt(session) {
-    const prompt = session.language === 'hausa'
-      ? 'Rubuta bayani (ko bar shi fanko):'
-      : 'Add description (or leave blank):';
-    return this.continueResponse(prompt);
-  }
-
-  /**
-   * Get callback consent prompt
-   */
-  getCallbackPrompt(session) {
-    const prompt = session.language === 'hausa'
-      ? 'Shin kana so su Kira ku?:\n1. Eh\n2. A\'a'
-      : 'Can we call you back?:\n1. Yes\n2. No';
-    return this.continueResponse(prompt);
-  }
-
-  /**
-   * Get confirmation prompt
-   */
-  getConfirmationPrompt(session) {
-    const summary = this.getIncidentSummary(session);
-    const prompt = session.language === 'hausa'
-      ? `${summary}\n\nAika? 1. Eh 2. A\'a`
-      : `${summary}\n\nSubmit? 1. Yes 2. No`;
-    return this.continueResponse(prompt);
-  }
-
-  /**
-   * Get incident summary for confirmation
-   */
-  getIncidentSummary(session) {
-    const type = session.dataIncidentType || 'Unknown';
-    const severity = session.dataSeverity || 'Medium';
-    const desc = session.dataDescription || '';
-    return `Type: ${type}\nSeverity: ${severity}\nDesc: ${desc}`;
-  }
-
-  /**
-   * Get latest alerts for user
-   */
-  async getLatestAlerts(session) {
     const alerts = await Alert.findAll({
       where: {
         status: 'active',
         validFrom: { [Op.lte]: new Date() },
         [Op.or]: [
-          { validUntil: { [Op.is]: null } },
+          { validUntil: null },
           { validUntil: { [Op.gte]: new Date() } }
         ]
       },
@@ -416,16 +376,19 @@ class UssdGateway {
       limit: 3,
     });
 
+    let result;
     if (alerts.length === 0) {
-      return session.language === 'hausa'
-        ? 'Babu alerta da sabo.'
-        : 'No new alerts.';
+      result = this.getLocalizedPrompt(lang, 'noAlerts') || 'No new alerts.';
+    } else {
+      result = alerts.map(a => {
+        const content = (lang === 'hausa' ? a.contentHausa : a.contentEnglish) || a.contentHausa || '';
+        return `${a.alertId}: ${content.substring(0, 100)}`;
+      }).join('\n\n');
     }
 
-    return alerts.map(a => {
-      const content = session.language === 'hausa' ? a.contentHausa : a.contentEnglish || a.contentHausa || '';
-      return `${a.alertId}: ${content.substring(0, 100)}`;
-    }).join('\n\n');
+    alertCache.data = result;
+    alertCache.timestamp = now;
+    return result;
   }
 
   /**
@@ -435,21 +398,6 @@ class UssdGateway {
     const now = Date.now();
     const lastActivity = new Date(session.lastActivityAt).getTime();
     return (now - lastActivity) > this.sessionTimeout;
-  }
-
-  /**
-   * Update session after processing
-   */
-  async updateSession(session, input, response) {
-    session.lastActivityAt = new Date();
-    session.currentStep++;
-
-    // If session ended, mark it
-    if (response && response.endSession) {
-      session.endedAt = new Date();
-    }
-
-    await session.save();
   }
 
   /**
@@ -482,22 +430,11 @@ class UssdGateway {
   }
 
   /**
-   * End with alert display
-   */
-  endWithAlert(session, alertText) {
-    return {
-      response: 'end',
-      message: this.truncateForUssd(alertText),
-    };
-  }
-
-  /**
-   * Truncate message for USSD (typically 182 characters max)
+   * Truncate message to configured max length
    */
   truncateForUssd(message) {
-    const maxLength = 182;
-    if (message.length <= maxLength) return message;
-    return message.substring(0, maxLength - 3) + '...';
+    if (message.length <= this.maxMessageLength) return message;
+    return message.substring(0, this.maxMessageLength - 3) + '...';
   }
 }
 

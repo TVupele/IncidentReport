@@ -1,138 +1,145 @@
 const express = require('express');
 const router = express.Router();
-const { ussdService } = require('../services');
-const { rateLimiterService } = require('../services');
+const { ussdService, rateLimiterService } = require('../services');
 const config = require('../config');
+
+// Import models once at the top
+const { UssdSession } = require('../models');
+
+// Structured logger placeholder – replace with actual logger (e.g., Winston, Pino)
+const logger = {
+  info: (...args) => console.log(new Date().toISOString(), ...args),
+  error: (...args) => console.error(new Date().toISOString(), ...args),
+};
+
+// Provider parameter extractors
+const providerParamExtractors = {
+  africastalking: (body) => ({
+    sessionId: body.sessionId,
+    phoneNumber: body.phoneNumber,
+    input: body.text,
+    serviceCode: body.serviceCode,
+    operator: body.operator,
+  }),
+  hub2: (body) => ({
+    sessionId: body.session_id,
+    phoneNumber: body.msisdn,
+    input: body.ussd_text,
+    serviceCode: config.ussd.shortCode,
+    operator: body.operator_name,
+  }),
+  // Fallback (Twilio-like)
+  default: (body) => ({
+    sessionId: body.SessionId,
+    phoneNumber: body.MobileNumber,
+    input: body.UserInput,
+    serviceCode: body.ServiceCode || config.ussd.shortCode,
+    operator: body.Operator,
+  }),
+};
+
+// Provider response formatters
+const providerResponseFormatters = {
+  africastalking: (message, isEnd) => ({
+    type: 'text',
+    body: `${isEnd ? 'END' : 'CON'} ${message}`,
+  }),
+  hub2: (message, isEnd) => ({
+    type: 'json',
+    body: {
+      ussd_response: {
+        SESSIONID: sessionId, // sessionId must be in scope – see usage below
+        MENU: message,
+        ACTION: isEnd ? 0 : 1,
+      },
+    },
+  }),
+  default: (message, isEnd) => ({
+    type: 'text',
+    body: `${isEnd ? 'END' : 'CON'} ${message}`,
+  }),
+};
 
 /**
  * @route POST /api/v1/ussd
- * @description Handle incoming USSD requests (Africa's Talking webhook)
+ * @description Handle incoming USSD requests
  */
-router.post('/',
-  async (req, res) => {
-    try {
-      // Extract USSD parameters based on provider
-      const provider = config.ussd.provider;
-      
-      let sessionId, phoneNumber, input, serviceCode, operator;
-      
-      if (provider === 'africastalking') {
-        // Africa's Talking format
-        const { sessionId: atSessionId, phoneNumber: atPhone, text, serviceCode: atServiceCode, operator: atOperator } = req.body;
-        sessionId = atSessionId;
-        phoneNumber = atPhone;
-        input = text;
-        serviceCode = atServiceCode;
-        operator = atOperator;
-      } else if (provider === 'hub2') {
-        // Hub2 format
-        const { session_id, msisdn, ussd_text, operator_name } = req.body;
-        sessionId = session_id;
-        phoneNumber = msisdn;
-        input = ussd_text;
-        serviceCode = config.ussd.shortCode;
-        operator = operator_name;
-      } else {
-        // Twilio format (fallback)
-        const { SessionId, MobileNumber, UserInput, ServiceCode, Operator } = req.body;
-        sessionId = SessionId;
-        phoneNumber = MobileNumber;
-        input = UserInput;
-        serviceCode = ServiceCode;
-        operator = Operator;
-      }
+router.post('/', async (req, res) => {
+  const provider = config.ussd.provider;
+  const extractor = providerParamExtractors[provider] || providerParamExtractors.default;
+  const params = extractor(req.body);
 
-      // Validate required fields
-      if (!sessionId || !phoneNumber) {
-        return res.status(400).json({
-          error: 'Missing required fields: sessionId, phoneNumber',
-        });
-      }
+  const { sessionId, phoneNumber, input, serviceCode, operator } = params;
 
-      // Rate limit by phone number
-      const cleanPhoneNumber = phoneNumber.replace(/\D/g, '');
-      const rateLimitResult = await rateLimiterService.checkRateLimit(cleanPhoneNumber, {
-        prefix: 'ussd',
-        maxRequests: 20,
-        windowMs: 3600000, // 1 hour
-      });
-
-      if (rateLimitResult.limited) {
-        // Return USSD response for rate limit
-        if (provider === 'africastalking') {
-          return res.send(`CON You have exceeded the rate limit. Please try again later.`);
-        }
-        return res.status(429).json({
-          error: 'Rate limit exceeded',
-        });
-      }
-
-      // Process USSD request
-      const result = await ussdService.handleRequest({
-        sessionId,
-        phoneNumber,
-        input,
-        serviceCode,
-        operator,
-        provider,
-      });
-
-      // Send USSD response based on provider format
-      if (provider === 'africastalking') {
-        // Africa's Talking: CON for continue, END for end
-        if (result.response === 'end') {
-          res.set('Content-Type', 'text/plain');
-          res.send(`END ${result.message}`);
-        } else {
-          res.set('Content-Type', 'text/plain');
-          res.send(`CON ${result.message}`);
-        }
-      } else if (provider === 'hub2') {
-        // Hub2: "1" to continue, "0" to end
-        if (result.response === 'end') {
-          res.json({
-            ussd_response: {
-             SESSIONID: sessionId,
-              MENU: result.message,
-              ACTION: 0, // End
-            }
-          });
-        } else {
-          res.json({
-            ussd_response: {
-              SESSIONID: sessionId,
-              MENU: result.message,
-              ACTION: 1, // Continue
-            }
-          });
-        }
-      } else {
-        // Twilio format (fallback)
-        if (result.response === 'end') {
-          res.set('Content-Type', 'text/plain');
-          res.send(`END ${result.message}`);
-        } else {
-          res.set('Content-Type', 'text/plain');
-          res.send(`CON ${result.message}`);
-        }
-      }
-    } catch (error) {
-      console.error('USSD handling error:', error);
-      
-      // Return error response based on provider
-      const provider = config.ussd.provider;
-      if (provider === 'africastalking') {
-        res.set('Content-Type', 'text/plain');
-        res.send('END An error occurred. Please try again.');
-      } else {
-        res.status(500).json({
-          error: 'Failed to process USSD request',
-          message: error.message,
-        });
-      }
-    }
+  // Validate required fields
+  if (!sessionId || !phoneNumber) {
+    logger.error('Missing required fields', { sessionId, phoneNumber });
+    return sendErrorResponse(res, provider, 'Missing required fields');
   }
-);
+
+  // Rate limiting
+  const cleanPhoneNumber = phoneNumber.replace(/\D/g, '');
+  const rateLimitResult = await rateLimiterService.checkRateLimit(cleanPhoneNumber, {
+    prefix: 'ussd',
+    maxRequests: config.rateLimit.ussdMaxRequests || 20,
+    windowMs: config.rateLimit.ussdWindowMs || 3600000,
+  });
+
+  if (rateLimitResult.limited) {
+    logger.warn('Rate limit exceeded', { phoneNumber: cleanPhoneNumber });
+    return sendProviderResponse(res, provider, sessionId, 'You have exceeded the rate limit. Please try again later.', true);
+  }
+
+  try {
+    // Process USSD request
+    const result = await ussdService.handleRequest({
+      sessionId,
+      phoneNumber,
+      input,
+      serviceCode,
+      operator,
+      provider,
+    });
+
+    sendProviderResponse(res, provider, sessionId, result.message, result.response === 'end');
+  } catch (error) {
+    logger.error('USSD handling error', { error: error.message, sessionId, phoneNumber });
+    sendProviderResponse(res, provider, sessionId, 'An error occurred. Please try again.', true);
+  }
+});
+
+/**
+ * Helper to send provider‑specific responses
+ */
+function sendProviderResponse(res, provider, sessionId, message, isEnd) {
+  const formatter = providerResponseFormatters[provider] || providerResponseFormatters.default;
+  let response;
+  if (provider === 'hub2') {
+    // Hub2 formatter needs sessionId
+    response = formatter(message, isEnd);
+    // Inject sessionId manually (simplified)
+    response.body.ussd_response.SESSIONID = sessionId;
+  } else {
+    response = formatter(message, isEnd);
+  }
+
+  if (response.type === 'text') {
+    res.set('Content-Type', 'text/plain; charset=utf-8').send(response.body);
+  } else {
+    res.json(response.body);
+  }
+}
+
+/**
+ * Helper to send error responses (client or server)
+ */
+function sendErrorResponse(res, provider, message, status = 400) {
+  if (provider === 'africastalking' || provider === 'default') {
+    res.set('Content-Type', 'text/plain; charset=utf-8').status(status).send(`END ${message}`);
+  } else {
+    res.status(status).json({ error: message });
+  }
+}
 
 /**
  * @route POST /api/v1/ussd/callback
@@ -141,73 +148,62 @@ router.post('/',
 router.post('/callback', async (req, res) => {
   try {
     const { sessionId, phoneNumber, text, status } = req.body;
-    
-    console.log(`USSD Callback - Session: ${sessionId}, Phone: ${phoneNumber}, Status: ${status}`);
-    
-    // Process any final actions after USSD session ends
+
+    logger.info('USSD Callback received', { sessionId, phoneNumber, status });
+
     if (status === 'Timeout' || status === 'Terminated') {
-      // Log session termination for analytics
-      const { UssdSession } = require('../models');
       await UssdSession.update(
-        { endedAt: new Date(), state: status.toLowerCase() },
+        {
+          endedAt: new Date(),
+          state: status.toLowerCase(),
+        },
         { where: { sessionId } }
       );
     }
-    
+
     res.status(200).send('OK');
   } catch (error) {
-    console.error('USSD callback error:', error);
+    logger.error('USSD callback error', { error: error.message, body: req.body });
     res.status(500).send('Error processing callback');
   }
 });
 
 /**
  * @route POST /api/v1/ussd/simulate
- * @description Simulate USSD request (for testing)
+ * @description Simulate USSD request – disabled in production
  */
-router.post('/simulate', async (req, res) => {
-  try {
-    const {
-      sessionId,
-      phoneNumber,
-      input,
-      language = 'hausa',
-      provider = 'africastalking',
-    } = req.body;
+if (config.env !== 'production') {
+  router.post('/simulate', async (req, res) => {
+    try {
+      const { sessionId, phoneNumber, input, language = 'hausa', provider = 'africastalking' } = req.body;
 
-    if (!sessionId || !phoneNumber) {
-      return res.status(400).json({
-        error: 'Missing required fields: sessionId, phoneNumber',
-      });
-    }
+      if (!sessionId || !phoneNumber) {
+        return res.status(400).json({ error: 'Missing required fields: sessionId, phoneNumber' });
+      }
 
-    // Create a mock USSD session
-    const result = await ussdService.handleRequest({
-      sessionId,
-      phoneNumber,
-      input,
-      serviceCode: config.ussd.shortCode,
-      operator: 'SIMULATION',
-      provider,
-    });
-
-    res.json({
-      success: true,
-      response: result,
-      sessionInfo: {
+      const result = await ussdService.handleRequest({
         sessionId,
         phoneNumber,
+        input,
+        serviceCode: config.ussd.shortCode,
+        operator: 'SIMULATION',
         provider,
-      },
-    });
-  } catch (error) {
-    console.error('USSD simulation error:', error);
-    res.status(500).json({
-      error: 'Simulation failed',
-      message: error.message,
-    });
-  }
-});
+      });
+
+      res.json({
+        success: true,
+        response: result,
+        sessionInfo: { sessionId, phoneNumber, provider },
+      });
+    } catch (error) {
+      logger.error('USSD simulation error', { error: error.message });
+      res.status(500).json({ error: 'Simulation failed', message: error.message });
+    }
+  });
+} else {
+  // Return 404 in production
+  router.post('/simulate', (req, res) => res.status(404).json({ error: 'Not found' }));
+}
 
 /**
  * @route GET /api/v1/ussd/session/:sessionId
@@ -215,30 +211,19 @@ router.post('/simulate', async (req, res) => {
  */
 router.get('/session/:sessionId', async (req, res) => {
   try {
-    const { UssdSession } = require('../models');
-    
-    const session = await UssdSession.findOne({ where: { sessionId: req.params.sessionId } });
+    const session = await UssdSession.findOne({
+      where: { sessionId: req.params.sessionId },
+      attributes: { exclude: ['stepHistory'] }, // Exclude large field directly
+    });
 
     if (!session) {
-      return res.status(404).json({
-        error: 'Session not found',
-      });
+      return res.status(404).json({ error: 'Session not found' });
     }
 
-    // Return session without stepHistory for performance
-    const sessionData = session.toJSON();
-    delete sessionData.stepHistory;
-
-    res.json({
-      success: true,
-      session: sessionData,
-    });
+    res.json({ success: true, session });
   } catch (error) {
-    console.error('Get session error:', error);
-    res.status(500).json({
-      error: 'Failed to get session',
-      message: error.message,
-    });
+    logger.error('Get session error', { error: error.message, sessionId: req.params.sessionId });
+    res.status(500).json({ error: 'Failed to get session', message: error.message });
   }
 });
 
@@ -246,7 +231,7 @@ router.get('/session/:sessionId', async (req, res) => {
  * @route GET /api/v1/ussd/health
  * @description Check USSD service health
  */
-router.get('/health', async (req, res) => {
+router.get('/health', (req, res) => {
   res.json({
     success: true,
     provider: config.ussd.provider,
