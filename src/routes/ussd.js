@@ -65,9 +65,11 @@ const providerResponseFormatters = {
  * @description Handle incoming USSD requests
  */
 router.post('/', async (req, res) => {
+  logger.info('Incoming USSD request', { body: req.body });
   const provider = config.ussd.provider;
   const extractor = providerParamExtractors[provider] || providerParamExtractors.default;
   const params = extractor(req.body);
+  logger.info('Extracted USSD params', { params });
 
   const { sessionId, phoneNumber, input, serviceCode, operator } = params;
 
