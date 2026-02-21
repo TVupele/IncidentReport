@@ -59,7 +59,7 @@ module.exports = {
   },
   
   ussd: {
-    shortCode: process.env.USSD_SHORT_CODE || '*384*88811#',
+    shortCode: process.env.USSD_SHORT_CODE || '*384*154011#',
     sessionTimeoutMs: parseInt(process.env.USSD_SESSION_TIMEOUT_MS, 10) || 120000,
     provider: process.env.USSD_PROVIDER || 'africastalking', // 'africastalking' or 'hub2'
   },
@@ -92,7 +92,7 @@ module.exports = {
       requestHelp: 'Taimako:\n1. Police\n2. Fire service\n3. Ambulance\n4. Community focal',
       alert: 'Alerta ya shiga\n{alert}',
       thankYou: 'Na gode! Rahotonka ya isa. ID: {incidentId}',
-      timeout: 'Session ya ƙare. Don sake fara, sake duba *123#',
+      timeout: 'Session ya ƙare. Don sake fara, sake duba *384*154011#',
       invalid: 'Shigarwa ba daidai ba. Gwada sake.',
     },
     english: {
@@ -102,7 +102,7 @@ module.exports = {
       requestHelp: 'Help needed:\n1. Police\n2. Fire service\n3. Ambulance\n4. Community focal',
       alert: 'New alert received\n{alert}',
       thankYou: 'Thank you! Your report submitted. ID: {incidentId}',
-      timeout: 'Session timed out. To restart, dial *384*88811#',
+      timeout: 'Session timed out. To restart, dial *384*154011#',
       invalid: 'Invalid input. Try again.',
     }
   }

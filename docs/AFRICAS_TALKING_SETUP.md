@@ -32,7 +32,7 @@ This guide covers setting up Africa's Talking for USSD and SMS functionality. Af
 ### For Sandbox (Testing):
 1. Log in to Africa's Talking Dashboard
 2. Go to **USSD** → **Short Codes**
-3. Request access to short code `*123#` (or your preferred code)
+3. Request access to short code `*384*154011#` (or your preferred code)
 4. Note the keyword (default: `INCIDENT`)
 
 ### For Production:
@@ -51,7 +51,7 @@ This guide covers setting up Africa's Talking for USSD and SMS functionality. Af
    ```
    Service Name: MATASA Incident Report
    Keyword: INCIDENT
-   Short Code: *123#
+   Short Code: *384*154011#
    Callback URL: https://your-domain.com/api/v1/ussd
    ```
 
@@ -71,13 +71,13 @@ Edit your `.env` file:
 # Africa's Talking Configuration
 AFRICAS_TALKING_API_KEY=ats_your_api_key_here
 AFRICAS_TALKING_USERNAME=sandbox
-AFRICAS_TALKING_SHORT_CODE=*123#
+AFRICAS_TALKING_SHORT_CODE=*384*154011#
 AFRICAS_TALKING_KEYWORD=INCIDENT
 AFRICAS_TALKING_CALLBACK_URL=https://your-domain.com/api/v1/ussd
 
 # USSD Provider
 USSD_PROVIDER=africastalking
-USSD_SHORT_CODE=*123#
+USSD_SHORT_CODE=*384*154011#
 ```
 
 ## Step 6: Configure Webhook
@@ -97,7 +97,7 @@ USSD_SHORT_CODE=*123#
   "sessionId": "ATUid_1234567890",
   "phoneNumber": "+2348012345678",
   "text": "1",
-  "serviceCode": "*123#",
+  "serviceCode": "*384*154011#",
   "operator": "MTN"
 }
 ```
@@ -143,7 +143,7 @@ curl -X POST http://localhost:3000/api/v1/ussd/simulate \
 
 ### Test with Africa's Talking Sandbox:
 1. Use Africa's Talking mobile app or test numbers
-2. Dial `*123#`
+2. Dial `*384*154011#`
 3. Follow the menu prompts
 
 ## Step 9: Production Checklist
@@ -179,7 +179,7 @@ Hub2 is another Nigerian provider worth considering:
 ```env
 USSD_PROVIDER=hub2
 HUB2_API_KEY=your_hub2_api_key
-HUB2_SHORT_CODE=*123#
+HUB2_SHORT_CODE=*384*154011#
 ```
 
 ### Hub2 Webhook Format:

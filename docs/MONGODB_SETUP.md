@@ -39,5 +39,5 @@ You should see:
 ```
 Server running on port 3000
 Environment: development
-USSD Short Code: *123#
+USSD Short Code: *384*154011#
 ```

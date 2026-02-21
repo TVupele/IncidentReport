@@ -126,7 +126,7 @@ curl -X POST https://your-domain.com/api/v1/sms \
 ### Test USSD
 
 On your phone:
-1. Dial `*123#` (your USSD short code)
+1. Dial `*384*154011#` (your USSD short code)
 2. You should see the menu
 3. Respond with numbers to navigate
 

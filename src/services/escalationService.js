@@ -200,38 +200,40 @@ class EscalationService {
    * Get assignee for a given type
    */
   async getAssigneeForType(type, incident) {
-    // This would typically query a database of responders
-    // For MVP, return placeholder data
+    const { Responder } = require('../models');
 
-    const assignees = {
-      'security_team': {
-        type: 'security_team',
-        contactName: 'Security Desk',
-        contactPhone: '+2348000000001',
-        organization: 'Event Security',
+    // Try to find a location-specific responder
+    const responders = await Responder.findAll({
+      where: {
+        type,
+        status: 'active',
+        [Op.or]: [
+          { state: incident.locationState, lga: incident.locationLga },
+          { state: incident.locationState, lga: null },
+          { state: null, lga: null },
+        ],
       },
-      'community_focal': {
-        type: 'community_focal',
-        contactName: 'Community Focal Point',
-        contactPhone: '+2348000000002',
-        organization: 'Community',
-      },
-      'agency_liaison': {
-        type: 'agency_liaison',
-        contactName: 'Police Liaison',
-        contactPhone: '+2348000000003',
-        organization: 'Police',
-      },
+      order: [['state', 'DESC'], ['lga', 'DESC']],
+    });
+
+    if (responders.length > 0) {
+      // Pick one at random
+      const responder = responders[Math.floor(Math.random() * responders.length)];
+      return {
+        type: responder.type,
+        contactName: responder.name,
+        contactPhone: responder.phone,
+        organization: responder.organization,
+      };
+    }
+
+    // Fallback to a default responder
+    return {
+      type: 'community_focal',
+      contactName: 'Community Focal Point',
+      contactPhone: '+2348000000002',
+      organization: 'Community',
     };
-
-    // Try to find location-specific assignee
-    const state = incident.locationState || 'Kano';
-    const lga = incident.locationLga;
-
-    // Check if we have a location-specific assignment
-    // This would be a database lookup in production
-
-    return assignees[type] || assignees['community_focal'];
   }
 
   /**

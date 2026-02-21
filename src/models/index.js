@@ -5,6 +5,7 @@ const Incident = require('./Incident');
 const Alert = require('./Alert');
 const UssdSession = require('./UssdSession');
 const EscalationRule = require('./EscalationRule');
+const Responder = require('./Responder');
 
 // Initialize models with sequelize instance
 const initModels = (sequelize) => {
@@ -13,6 +14,7 @@ const initModels = (sequelize) => {
     Alert: Alert(sequelize),
     UssdSession: UssdSession(sequelize),
     EscalationRule: EscalationRule(sequelize),
+    Responder: Responder(sequelize),
   };
 
   // Set up associations if needed
@@ -33,4 +35,5 @@ module.exports = {
   Alert,
   UssdSession,
   EscalationRule,
+  Responder,
 };

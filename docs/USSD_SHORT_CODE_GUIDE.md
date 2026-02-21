@@ -5,7 +5,7 @@ This guide walks you through getting a USSD short code and configuring it so use
 ## Overview
 
 ```
-User dials (*123#) 
+User dials (*384*154011#) 
     ↓
 Telco network receives request
     ↓
@@ -41,7 +41,7 @@ User sees menu on phone
 
 **For Sandbox (Free Testing):**
 1. Click **Request Sandbox Number**
-2. Select `*123#` from available codes (most common)
+2. Select `*384*154011#` from available codes (most common)
 3. Or request another number like `*234#`, `*345#`
 4. Click **Request**
 
@@ -67,7 +67,7 @@ User sees menu on phone
 ```
 Service Name: MATASA Incident Report
 Keyword: INCIDENT (or your preferred keyword)
-Short Code: *123#
+Short Code: *384*154011#
 Callback URL: https://your-domain.com/api/v1/ussd
 Response Type: Text
 ```
@@ -119,7 +119,7 @@ Response Type: Text
 ```env
 USSD_PROVIDER=hub2
 HUB2_API_KEY=your_hub2_key
-HUB2_SHORT_CODE=*123#
+HUB2_SHORT_CODE=*384*154011#
 ```
 
 ---
@@ -204,7 +204,7 @@ curl -X POST http://localhost:3000/api/v1/ussd/simulate \
 1. Deploy your app
 2. Get your HTTPS URL
 3. Update Africa's Talking with the URL
-4. Dial `*123#` from a Nigerian phone
+4. Dial `*384*154011#` from a Nigerian phone
 5. You should see:
    ```
    CON MATASA Incident Report
@@ -219,7 +219,7 @@ curl -X POST http://localhost:3000/api/v1/ussd/simulate \
 
 ## Expected Response Flow
 
-When user dials `*123#`:
+When user dials `*384*154011#`:
 
 1. **First Request (no input)**
    ```

@@ -484,4 +484,28 @@ module.exports.calculateGeohash = calculateGeohash;
 
 const { Op } = require('sequelize');
 
+/**
+ * @route GET /api/v1/admin/responders
+ * @description Get all responders
+ */
+router.get('/responders', async (req, res) => {
+  try {
+    const { Responder } = require('../models');
+    const responders = await Responder.findAll({
+      order: [['createdAt', 'DESC']],
+    });
+
+    res.json({
+      success: true,
+      responders,
+    });
+  } catch (error) {
+    console.error('Get responders error:', error);
+    res.status(500).json({
+      error: 'Failed to get responders',
+      message: error.message,
+    });
+  }
+});
+
 module.exports = router;

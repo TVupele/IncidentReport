@@ -279,39 +279,27 @@
     
     // Responders (placeholder)
     async function loadResponders() {
+      const response = await apiGet('/admin/responders');
+      
       const tbody = document.getElementById('responders-table');
-      tbody.innerHTML = `
+      
+      if (!response.success || !response.responders || response.responders.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No responders found</td></tr>';
+        return;
+      }
+      
+      tbody.innerHTML = response.responders.map(responder => `
         <tr>
-          <td>Security Desk</td>
-          <td>Event Security</td>
-          <td>+2348000000001</td>
-          <td>Security Team</td>
-          <td><span style="color: #16a34a">Active</span></td>
+          <td>${responder.name}</td>
+          <td>${responder.organization}</td>
+          <td>${responder.phone}</td>
+          <td>${responder.type}</td>
+          <td><span style="color: ${responder.status === 'active' ? '#16a34a' : '#dc2626'}">${responder.status}</span></td>
           <td>
-            <button class="btn btn-secondary">Edit</button>
+            <button class="btn btn-secondary" onclick="editResponder('${responder.id}')">Edit</button>
           </td>
         </tr>
-        <tr>
-          <td>Community Focal</td>
-          <td>Community</td>
-          <td>+2348000000002</td>
-          <td>Community Focal</td>
-          <td><span style="color: #16a34a">Active</span></td>
-          <td>
-            <button class="btn btn-secondary">Edit</button>
-          </td>
-        </tr>
-        <tr>
-          <td>Police Liaison</td>
-          <td>Police</td>
-          <td>+2348000000003</td>
-          <td>Agency Liaison</td>
-          <td><span style="color: #16a34a">Active</span></td>
-          <td>
-            <button class="btn btn-secondary">Edit</button>
-          </td>
-        </tr>
-      `;
+      `).join('');
     }
     
     // API status check
